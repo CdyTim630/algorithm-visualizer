@@ -171,10 +171,15 @@ const DPModule: React.FC = () => {
             {/* ===== Stairs ===== */}
             {tab === 'stairs' && (
                 <div className="space-y-4">
-                    <div className="flex items-center gap-4 bg-algo-surface border border-algo-border rounded-xl p-4">
-                        <span className="text-sm text-algo-muted">階數 n =</span>
-                        <input type="range" min="2" max="10" value={stairsN} onChange={e => setStairsN(parseInt(e.target.value))} className="flex-1 accent-algo-accent" />
-                        <span className="font-mono text-algo-accent text-xl font-bold w-8 text-right">{stairsN}</span>
+                    <div className="bg-algo-surface border border-algo-border rounded-xl p-4">
+                        <div className="flex items-center gap-4">
+                            <span className="text-sm text-algo-muted">階數 n =</span>
+                            <input type="range" min="2" max="10" value={stairsN} onChange={e => setStairsN(parseInt(e.target.value))} className="flex-1 accent-algo-accent" />
+                            <span className="font-mono text-algo-accent text-xl font-bold w-8 text-right">{stairsN}</span>
+                        </div>
+                        <div className="slider-ticks ml-[72px] mr-[40px]">
+                            {Array.from({ length: 9 }, (_, i) => <span key={i}>{i + 2}</span>)}
+                        </div>
                     </div>
 
                     <ControlBar isPlaying={stairPlaying} onPlay={() => setStairPlaying(true)} onPause={() => setStairPlaying(false)}
@@ -237,10 +242,15 @@ const DPModule: React.FC = () => {
             {/* ===== Knapsack ===== */}
             {tab === 'knapsack' && (
                 <div className="space-y-4">
-                    <div className="flex items-center gap-4 bg-algo-surface border border-algo-border rounded-xl p-4">
-                        <span className="text-sm text-algo-muted">背包容量 W =</span>
-                        <input type="range" min="3" max="12" value={knapsackW} onChange={e => setKnapsackW(parseInt(e.target.value))} className="flex-1 accent-algo-accent" />
-                        <span className="font-mono text-algo-accent text-xl font-bold w-8 text-right">{knapsackW}</span>
+                    <div className="bg-algo-surface border border-algo-border rounded-xl p-4">
+                        <div className="flex items-center gap-4">
+                            <span className="text-sm text-algo-muted">背包容量 W =</span>
+                            <input type="range" min="3" max="12" value={knapsackW} onChange={e => setKnapsackW(parseInt(e.target.value))} className="flex-1 accent-algo-accent" />
+                            <span className="font-mono text-algo-accent text-xl font-bold w-8 text-right">{knapsackW}</span>
+                        </div>
+                        <div className="slider-ticks ml-[100px] mr-[40px]">
+                            {Array.from({ length: 10 }, (_, i) => <span key={i}>{i + 3}</span>)}
+                        </div>
                     </div>
 
                     {/* Items list */}
