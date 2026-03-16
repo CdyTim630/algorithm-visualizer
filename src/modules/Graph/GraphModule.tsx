@@ -121,14 +121,16 @@ const eulerExamples = [
     {
         name: '柯尼斯堡七橋 ❌',
         nodes: [
-            { id: 'A', x: 80, y: 150 }, { id: 'B', x: 200, y: 60 },
-            { id: 'C', x: 200, y: 240 }, { id: 'D', x: 330, y: 150 },
+            { id: 'A', x: 120, y: 150 },
+            { id: 'B', x: 230, y: 60 },
+            { id: 'C', x: 230, y: 240 },
+            { id: 'D', x: 340, y: 150 },
         ],
         edges: [
             { from: 'A', to: 'B' }, { from: 'A', to: 'B' },
             { from: 'A', to: 'C' }, { from: 'A', to: 'C' },
-            { from: 'B', to: 'D' }, { from: 'C', to: 'D' },
-            { from: 'B', to: 'C' },
+            { from: 'A', to: 'D' }, { from: 'B', to: 'D' },
+            { from: 'C', to: 'D' },
         ],
     },
 ];
@@ -190,6 +192,44 @@ const GraphModule: React.FC = () => {
                 const from = nodes.find(n => n.id === e.from)!;
                 const to = nodes.find(n => n.id === e.to)!;
                 if (!from || !to) return null;
+                
+                let edgeCount = 0;
+                let edgeIndex = 0;
+                edges.forEach((ed, idx) => {
+                    const isSame = (ed.from === e.from && ed.to === e.to) || (!directed && ed.from === e.to && ed.to === e.from);
+                    if (isSame) {
+                        if (idx < i) edgeIndex++;
+                        edgeCount++;
+                    }
+                });
+
+                if (edgeCount > 1) {
+                    const dx = to.x - from.x;
+                    const dy = to.y - from.y;
+                    const mx = (from.x + to.x) / 2;
+                    const my = (from.y + to.y) / 2;
+                    const len = Math.sqrt(dx * dx + dy * dy);
+                    const nx = -dy / len;
+                    const ny = dx / len;
+                    // Determine offset multiplier based on parity, so it curves symmetrically
+                    const offset = (edgeIndex - (edgeCount - 1) / 2) * 50;
+                    const cx = mx + nx * offset;
+                    const cy = my + ny * offset;
+
+                    return (
+                        <g key={i}>
+                            <path d={`M ${from.x} ${from.y} Q ${cx} ${cy} ${to.x} ${to.y}`} fill="none" stroke="#475569" strokeWidth="2" />
+                            {directed && (
+                                <polygon
+                                    points={`${to.x},${to.y} ${to.x - 8},${to.y - 4} ${to.x - 8},${to.y + 4}`}
+                                    fill="#475569"
+                                    transform={`rotate(${Math.atan2(to.y - cy, to.x - cx) * 180 / Math.PI}, ${to.x}, ${to.y})`}
+                                />
+                            )}
+                        </g>
+                    );
+                }
+
                 return (
                     <g key={i}>
                         <line x1={from.x} y1={from.y} x2={to.x} y2={to.y} stroke="#475569" strokeWidth="2" />
