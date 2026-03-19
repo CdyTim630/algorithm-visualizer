@@ -6,6 +6,16 @@ import PseudocodeDisplay from '../../components/PseudocodeDisplay';
 import AlgorithmInfoCard from '../../components/AlgorithmInfoCard';
 
 // ======== Types ========
+interface MergeTreeNode {
+    id: string;
+    values: number[];
+    left: number;
+    right: number;
+    depth: number;
+    status: 'pending' | 'splitting' | 'merging' | 'merged' | 'active';
+    children?: [string, string];
+}
+
 interface SortStep {
     array: number[];
     comparing: number[];
@@ -14,6 +24,11 @@ interface SortStep {
     pivot?: number;
     partitionRange?: [number, number];
     mergeRange?: [number, number];
+    mergeLeft?: number[];   // indices belonging to left sub-array during merge
+    mergeRight?: number[];  // indices belonging to right sub-array during merge
+    mergeHighlight?: number; // index currently being placed during merge
+    mergeTreeNodes?: MergeTreeNode[];
+    activeTreeNodeId?: string;
     description: string;
     pseudocodeLine: number;
     comparisons: number;
@@ -78,32 +93,168 @@ function generateMergeSortSteps(inputArr: number[]): SortStep[] {
     const arr = [...inputArr];
     const steps: SortStep[] = [];
     let comparisons = 0, swapCount = 0;
-    steps.push({ array: [...arr], comparing: [], swapping: [], sorted: [], description: '開始 Merge Sort', pseudocodeLine: 0, comparisons: 0, swaps: 0, round: 0 });
+
+    // Build merge tree structure for visualization
+    const treeNodes: Map<string, MergeTreeNode> = new Map();
+
+    function buildTree(l: number, r: number, depth: number): string {
+        const id = `${l}-${r}`;
+        const node: MergeTreeNode = {
+            id, values: arr.slice(l, r + 1), left: l, right: r, depth,
+            status: 'pending',
+        };
+        if (l < r) {
+            const mid = Math.floor((l + r) / 2);
+            const leftChild = buildTree(l, mid, depth + 1);
+            const rightChild = buildTree(mid + 1, r, depth + 1);
+            node.children = [leftChild, rightChild];
+        }
+        treeNodes.set(id, node);
+        return id;
+    }
+    buildTree(0, arr.length - 1, 0);
+
+    function getTreeSnapshot(): MergeTreeNode[] {
+        return Array.from(treeNodes.values()).map(n => ({ ...n, values: [...n.values] }));
+    }
+
+    function setNodeStatus(id: string, status: MergeTreeNode['status']) {
+        const node = treeNodes.get(id);
+        if (node) node.status = status;
+    }
+
+    function updateNodeValues(id: string, values: number[]) {
+        const node = treeNodes.get(id);
+        if (node) node.values = values;
+    }
+
+    steps.push({
+        array: [...arr], comparing: [], swapping: [], sorted: [],
+        mergeTreeNodes: getTreeSnapshot(), activeTreeNodeId: `0-${arr.length - 1}`,
+        description: '🚀 開始 Merge Sort — 使用「分治法」：先把陣列拆開，再合併回來',
+        pseudocodeLine: 0, comparisons: 0, swaps: 0, round: 0,
+    });
 
     function mergeSort(a: number[], l: number, r: number, depth: number) {
-        if (l >= r) return;
+        const nodeId = `${l}-${r}`;
+        if (l >= r) {
+            setNodeStatus(nodeId, 'merged');
+            steps.push({
+                array: [...arr], comparing: [], swapping: [], sorted: [],
+                mergeRange: [l, r],
+                mergeTreeNodes: getTreeSnapshot(), activeTreeNodeId: nodeId,
+                description: `📌 子陣列 [${l}] = ${arr[l]}，只有一個元素，已排序`,
+                pseudocodeLine: 1, comparisons, swaps: swapCount, round: depth,
+            });
+            return;
+        }
         const mid = Math.floor((l + r) / 2);
-        steps.push({ array: [...arr], comparing: [], swapping: [], sorted: [], mergeRange: [l, r], description: `分割 [${l}..${r}]，中點 = ${mid}`, pseudocodeLine: 1, comparisons, swaps: swapCount, round: depth });
+
+        // Step: splitting
+        setNodeStatus(nodeId, 'splitting');
+        const leftIndices = Array.from({ length: mid - l + 1 }, (_, i) => l + i);
+        const rightIndices = Array.from({ length: r - mid }, (_, i) => mid + 1 + i);
+        steps.push({
+            array: [...arr], comparing: [], swapping: [], sorted: [],
+            mergeRange: [l, r], mergeLeft: leftIndices, mergeRight: rightIndices,
+            mergeTreeNodes: getTreeSnapshot(), activeTreeNodeId: nodeId,
+            description: `✂️ 分割 [${l}..${r}] → 左半 [${l}..${mid}] 和右半 [${mid + 1}..${r}]`,
+            pseudocodeLine: 2, comparisons, swaps: swapCount, round: depth,
+        });
+
         mergeSort(a, l, mid, depth + 1);
         mergeSort(a, mid + 1, r, depth + 1);
-        // Merge
-        const left = a.slice(l, mid + 1);
-        const right = a.slice(mid + 1, r + 1);
+
+        // Merge phase
+        setNodeStatus(nodeId, 'merging');
+        const leftArr = a.slice(l, mid + 1);
+        const rightArr = a.slice(mid + 1, r + 1);
+
+        steps.push({
+            array: [...arr], comparing: [], swapping: [], sorted: [],
+            mergeRange: [l, r],
+            mergeLeft: leftIndices, mergeRight: rightIndices,
+            mergeTreeNodes: getTreeSnapshot(), activeTreeNodeId: nodeId,
+            description: `🔀 開始合併 [${l}..${mid}] = [${leftArr.join(',')}] 和 [${mid + 1}..${r}] = [${rightArr.join(',')}]`,
+            pseudocodeLine: 5, comparisons, swaps: swapCount, round: depth,
+        });
+
         let i = 0, j = 0, k = l;
-        while (i < left.length && j < right.length) {
+        while (i < leftArr.length && j < rightArr.length) {
             comparisons++;
-            if (left[i] <= right[j]) { a[k] = left[i]; i++; }
-            else { a[k] = right[j]; j++; }
-            arr[k] = a[k]; k++;
+            // Show comparison
+            const leftVal = leftArr[i];
+            const rightVal = rightArr[j];
+            steps.push({
+                array: [...arr], comparing: [l + i, mid + 1 + j], swapping: [], sorted: [],
+                mergeRange: [l, r],
+                mergeLeft: leftIndices, mergeRight: rightIndices,
+                mergeTreeNodes: getTreeSnapshot(), activeTreeNodeId: nodeId,
+                description: `⚖️ 比較：左邊 ${leftVal} vs 右邊 ${rightVal} → ${leftVal <= rightVal ? `${leftVal} ≤ ${rightVal}，取左邊` : `${rightVal} < ${leftVal}，取右邊`}`,
+                pseudocodeLine: 5, comparisons, swaps: swapCount, round: depth,
+            });
+
+            if (leftArr[i] <= rightArr[j]) { a[k] = leftArr[i]; i++; }
+            else { a[k] = rightArr[j]; j++; }
+            arr[k] = a[k];
             swapCount++;
-            steps.push({ array: [...arr], comparing: [], swapping: [], sorted: [], mergeRange: [l, r], description: `合併 [${l}..${r}]：放入 ${a[k - 1]}`, pseudocodeLine: 3, comparisons, swaps: swapCount, round: depth });
+
+            // Show placement
+            steps.push({
+                array: [...arr], comparing: [], swapping: [], sorted: [],
+                mergeRange: [l, r], mergeHighlight: k,
+                mergeLeft: leftIndices, mergeRight: rightIndices,
+                mergeTreeNodes: getTreeSnapshot(), activeTreeNodeId: nodeId,
+                description: `📥 放入 ${a[k]} 到位置 [${k}]`,
+                pseudocodeLine: 5, comparisons, swaps: swapCount, round: depth,
+            });
+            k++;
         }
-        while (i < left.length) { a[k] = left[i]; arr[k] = a[k]; i++; k++; }
-        while (j < right.length) { a[k] = right[j]; arr[k] = a[k]; j++; k++; }
-        steps.push({ array: [...arr], comparing: [], swapping: [], sorted: [], mergeRange: [l, r], description: `合併完成 [${l}..${r}]`, pseudocodeLine: 4, comparisons, swaps: swapCount, round: depth });
+        while (i < leftArr.length) {
+            a[k] = leftArr[i]; arr[k] = a[k]; i++;
+            swapCount++;
+            steps.push({
+                array: [...arr], comparing: [], swapping: [], sorted: [],
+                mergeRange: [l, r], mergeHighlight: k,
+                mergeLeft: leftIndices, mergeRight: rightIndices,
+                mergeTreeNodes: getTreeSnapshot(), activeTreeNodeId: nodeId,
+                description: `📥 左邊剩餘：放入 ${a[k]} 到位置 [${k}]`,
+                pseudocodeLine: 5, comparisons, swaps: swapCount, round: depth,
+            });
+            k++;
+        }
+        while (j < rightArr.length) {
+            a[k] = rightArr[j]; arr[k] = a[k]; j++;
+            swapCount++;
+            steps.push({
+                array: [...arr], comparing: [], swapping: [], sorted: [],
+                mergeRange: [l, r], mergeHighlight: k,
+                mergeLeft: leftIndices, mergeRight: rightIndices,
+                mergeTreeNodes: getTreeSnapshot(), activeTreeNodeId: nodeId,
+                description: `📥 右邊剩餘：放入 ${a[k]} 到位置 [${k}]`,
+                pseudocodeLine: 5, comparisons, swaps: swapCount, round: depth,
+            });
+            k++;
+        }
+
+        // Merge complete
+        setNodeStatus(nodeId, 'merged');
+        updateNodeValues(nodeId, a.slice(l, r + 1));
+        steps.push({
+            array: [...arr], comparing: [], swapping: [], sorted: [],
+            mergeRange: [l, r],
+            mergeTreeNodes: getTreeSnapshot(), activeTreeNodeId: nodeId,
+            description: `✅ 合併完成 [${l}..${r}] = [${a.slice(l, r + 1).join(', ')}]`,
+            pseudocodeLine: 5, comparisons, swaps: swapCount, round: depth,
+        });
     }
     mergeSort(arr, 0, arr.length - 1, 1);
-    steps.push({ array: [...arr], comparing: [], swapping: [], sorted: arr.map((_, i) => i), description: '排序完成！', pseudocodeLine: 5, comparisons, swaps: swapCount, round: 0 });
+    steps.push({
+        array: [...arr], comparing: [], swapping: [], sorted: arr.map((_, i) => i),
+        mergeTreeNodes: getTreeSnapshot(),
+        description: '🎉 排序完成！所有元素已合併為有序陣列',
+        pseudocodeLine: 5, comparisons, swaps: swapCount, round: 0,
+    });
     return steps;
 }
 
@@ -252,8 +403,14 @@ const SortingModule: React.FC = () => {
     const getBarColor = (i: number) => {
         if (step?.swapping?.includes(i)) return '#ef4444';
         if (step?.pivot === i) return '#a855f7';
-        if (step?.comparing?.includes(i)) return '#f97316';
+        if (step?.comparing?.includes(i)) return '#f59e0b';
         if (step?.sorted?.includes(i)) return '#22c55e';
+        // Merge sort specific coloring
+        if (algorithm === 'merge' && step?.mergeRange) {
+            if (step.mergeHighlight === i) return '#22d3ee'; // cyan for just-placed element
+            if (step.mergeLeft?.includes(i) && step.mergeRight) return '#5b8def'; // left sub-array = blue
+            if (step.mergeRight?.includes(i) && step.mergeLeft) return '#a78bfa'; // right sub-array = purple
+        }
         return '#3b82f6';
     };
 
@@ -317,40 +474,100 @@ const SortingModule: React.FC = () => {
 
             {/* Main visualization */}
             <div className="bg-algo-surface border border-algo-border rounded-2xl p-6">
-                {/* Teaching mode narration */}
-                {isTeachingMode && step && (
-                    <motion.div key={currentStep} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }}
-                        className="mb-4 bg-algo-pivot/10 border border-algo-pivot/30 rounded-lg p-3 text-sm text-algo-text">
-                        🎓 {step.description}
+                {/* Step description banner - always visible */}
+                {step && (
+                    <motion.div key={currentStep} initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.25 }}
+                        className="mb-5 bg-gradient-to-r from-algo-processing/10 via-algo-pivot/10 to-algo-accent/10 border border-algo-processing/30 rounded-xl p-4 text-sm text-algo-text font-medium">
+                        <span className="text-base">{step.description}</span>
                     </motion.div>
                 )}
 
-                {/* Bar chart */}
-                <div className="flex items-end justify-center gap-1.5 h-64 mb-4">
-                    {step?.array.map((val, i) => (
-                        <motion.div key={`${i}-${val}`}
-                            layout
-                            className="relative flex flex-col items-center"
-                            style={{ width: `${Math.max(600 / step.array.length, 20)}px` }}
+                {/* Bar chart with merge range brackets */}
+                <div className="relative">
+                    <div className="flex items-end justify-center gap-1.5 h-64 mb-2" id="sort-bar-chart">
+                        {step?.array.map((val, i) => {
+                            const inMergeRange = step.mergeRange && i >= step.mergeRange[0] && i <= step.mergeRange[1];
+                            return (
+                                <motion.div key={`bar-${i}`}
+                                    layout
+                                    className="relative flex flex-col items-center"
+                                    style={{ width: `${Math.max(600 / step.array.length, 24)}px` }}
+                                >
+                                    <motion.span
+                                        key={`val-${i}-${val}`}
+                                        initial={{ scale: 1.3, color: '#22d3ee' }}
+                                        animate={{ scale: 1, color: '#8b8aaa' }}
+                                        transition={{ duration: 0.4 }}
+                                        className="text-xs font-mono mb-1 font-bold"
+                                    >{val}</motion.span>
+                                    <motion.div
+                                        animate={{
+                                            height: `${(val / maxVal) * 200}px`,
+                                            backgroundColor: getBarColor(i),
+                                            boxShadow: step.comparing?.includes(i)
+                                                ? '0 0 12px rgba(245,158,11,0.5)'
+                                                : step.mergeHighlight === i
+                                                    ? '0 0 12px rgba(34,211,238,0.5)'
+                                                    : 'none',
+                                        }}
+                                        transition={{ duration: 0.3, ease: 'easeInOut' }}
+                                        className="w-full rounded-t-md"
+                                    />
+                                    <span className="text-[10px] text-algo-muted mt-1 font-mono">{i}</span>
+                                    {/* Merge range bracket indicator */}
+                                    {algorithm === 'merge' && inMergeRange && (
+                                        <motion.div
+                                            initial={{ opacity: 0 }}
+                                            animate={{ opacity: 1 }}
+                                            className="absolute -bottom-5 left-0 right-0 h-1 rounded-full"
+                                            style={{
+                                                backgroundColor: step.mergeLeft?.includes(i) ? '#5b8def'
+                                                    : step.mergeRight?.includes(i) ? '#a78bfa'
+                                                    : '#4a4f7a',
+                                            }}
+                                        />
+                                    )}
+                                </motion.div>
+                            );
+                        })}
+                    </div>
+                    {/* Merge range label */}
+                    {algorithm === 'merge' && step?.mergeRange && (
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            className="text-center text-xs text-algo-muted mt-4 mb-2"
                         >
-                            <span className="text-xs font-mono text-algo-muted mb-1">{val}</span>
-                            <motion.div
-                                animate={{ height: `${(val / maxVal) * 200}px`, backgroundColor: getBarColor(i) }}
-                                transition={{ duration: 0.3 }}
-                                className="w-full rounded-t-md"
-                            />
-                            <span className="text-[10px] text-algo-muted mt-1 font-mono">{i}</span>
+                            目前操作範圍：[{step.mergeRange[0]}..{step.mergeRange[1]}]
                         </motion.div>
-                    ))}
+                    )}
                 </div>
 
+                {/* Merge Sort Tree Visualization */}
+                {algorithm === 'merge' && step?.mergeTreeNodes && (
+                    <MergeTreeVisualization nodes={step.mergeTreeNodes} activeNodeId={step.activeTreeNodeId} />
+                )}
+
                 {/* Color legend */}
-                <div className="flex flex-wrap gap-4 text-xs justify-center mb-4">
-                    <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-algo-processing" /> 預設</span>
-                    <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-algo-comparing" /> 比較中</span>
-                    <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-algo-error" /> 交換</span>
-                    <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-algo-done" /> 已完成</span>
-                    <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-algo-pivot" /> Pivot</span>
+                <div className="flex flex-wrap gap-4 text-xs justify-center mb-4 mt-4">
+                    {algorithm === 'merge' ? (
+                        <>
+                            <span className="flex items-center gap-1"><span className="w-3 h-3 rounded" style={{ backgroundColor: '#5b8def' }} /> 左半子陣列</span>
+                            <span className="flex items-center gap-1"><span className="w-3 h-3 rounded" style={{ backgroundColor: '#a78bfa' }} /> 右半子陣列</span>
+                            <span className="flex items-center gap-1"><span className="w-3 h-3 rounded" style={{ backgroundColor: '#f59e0b' }} /> 比較中</span>
+                            <span className="flex items-center gap-1"><span className="w-3 h-3 rounded" style={{ backgroundColor: '#22d3ee' }} /> 放入位置</span>
+                            <span className="flex items-center gap-1"><span className="w-3 h-3 rounded" style={{ backgroundColor: '#22c55e' }} /> 已完成</span>
+                        </>
+                    ) : (
+                        <>
+                            <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-algo-processing" /> 預設</span>
+                            <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-algo-comparing" /> 比較中</span>
+                            <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-algo-error" /> 交換</span>
+                            <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-algo-done" /> 已完成</span>
+                            <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-algo-pivot" /> Pivot</span>
+                        </>
+                    )}
                 </div>
 
                 {/* Stats */}
@@ -360,16 +577,16 @@ const SortingModule: React.FC = () => {
                         <div className="text-xl font-bold text-algo-comparing">{step?.comparisons || 0}</div>
                     </div>
                     <div className="bg-algo-card rounded-lg p-3 text-center">
-                        <div className="text-algo-muted text-xs">交換次數</div>
+                        <div className="text-algo-muted text-xs">{algorithm === 'merge' ? '放入次數' : '交換次數'}</div>
                         <div className="text-xl font-bold text-algo-error">{step?.swaps || 0}</div>
                     </div>
                     <div className="bg-algo-card rounded-lg p-3 text-center">
-                        <div className="text-algo-muted text-xs">當前輪/層</div>
+                        <div className="text-algo-muted text-xs">遞迴深度</div>
                         <div className="text-xl font-bold text-algo-accent">{step?.round || 0}</div>
                     </div>
                     <div className="bg-algo-card rounded-lg p-3 text-center">
-                        <div className="text-algo-muted text-xs">描述</div>
-                        <div className="text-xs font-medium text-algo-text mt-1 leading-snug">{step?.description}</div>
+                        <div className="text-algo-muted text-xs">步驟</div>
+                        <div className="text-sm font-bold text-algo-text mt-1">{currentStep} / {steps.length - 1}</div>
                     </div>
                 </div>
             </div>
@@ -423,6 +640,125 @@ const SortingModule: React.FC = () => {
                         algorithm === 'merge' ? 'Merge Sort 為什麼一定是 O(n log n)？它的缺點是什麼？' :
                             '什麼時候 Quick Sort 會退化成 O(n²)？怎麼避免？'}
             />
+        </div>
+    );
+};
+
+// ======== Merge Sort Tree Visualization ========
+const MergeTreeVisualization: React.FC<{ nodes: MergeTreeNode[]; activeNodeId?: string }> = ({ nodes, activeNodeId }) => {
+    // Group nodes by depth
+    const maxDepth = Math.max(...nodes.map(n => n.depth));
+    const depthGroups: MergeTreeNode[][] = [];
+    for (let d = 0; d <= maxDepth; d++) {
+        depthGroups.push(nodes.filter(n => n.depth === d));
+    }
+
+    const getNodeStyle = (node: MergeTreeNode) => {
+        const isActive = node.id === activeNodeId;
+        const base: React.CSSProperties = {
+            padding: '4px 8px',
+            borderRadius: '8px',
+            fontSize: '11px',
+            fontFamily: 'monospace',
+            fontWeight: 600,
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '3px',
+            border: '1.5px solid',
+            transition: 'all 0.3s ease',
+            minWidth: '28px',
+            justifyContent: 'center',
+            whiteSpace: 'nowrap' as const,
+        };
+        switch (node.status) {
+            case 'splitting':
+                return {
+                    ...base,
+                    backgroundColor: isActive ? 'rgba(245,158,11,0.2)' : 'rgba(245,158,11,0.08)',
+                    borderColor: isActive ? '#f59e0b' : 'rgba(245,158,11,0.3)',
+                    color: '#f59e0b',
+                    boxShadow: isActive ? '0 0 12px rgba(245,158,11,0.3)' : 'none',
+                };
+            case 'merging':
+                return {
+                    ...base,
+                    backgroundColor: isActive ? 'rgba(34,211,238,0.2)' : 'rgba(34,211,238,0.08)',
+                    borderColor: isActive ? '#22d3ee' : 'rgba(34,211,238,0.3)',
+                    color: '#22d3ee',
+                    boxShadow: isActive ? '0 0 12px rgba(34,211,238,0.3)' : 'none',
+                };
+            case 'merged':
+                return {
+                    ...base,
+                    backgroundColor: isActive ? 'rgba(74,222,128,0.2)' : 'rgba(74,222,128,0.08)',
+                    borderColor: isActive ? '#4ade80' : 'rgba(74,222,128,0.3)',
+                    color: '#4ade80',
+                    boxShadow: isActive ? '0 0 12px rgba(74,222,128,0.3)' : 'none',
+                };
+            default:
+                return {
+                    ...base,
+                    backgroundColor: isActive ? 'rgba(91,141,239,0.15)' : 'rgba(74,79,122,0.2)',
+                    borderColor: isActive ? '#5b8def' : 'rgba(74,79,122,0.4)',
+                    color: isActive ? '#5b8def' : '#8b8aaa',
+                    boxShadow: isActive ? '0 0 12px rgba(91,141,239,0.3)' : 'none',
+                };
+        }
+    };
+
+    const statusIcon = (status: MergeTreeNode['status']) => {
+        switch (status) {
+            case 'splitting': return '✂️';
+            case 'merging': return '🔀';
+            case 'merged': return '✅';
+            default: return '⬜';
+        }
+    };
+
+    return (
+        <div className="mt-6 mb-4">
+            <h4 className="text-xs font-bold text-algo-muted mb-3 flex items-center gap-2">
+                <span className="text-base">🌳</span> 遞迴分解樹
+                <span className="text-[10px] font-normal text-algo-muted/70 ml-2">
+                    ⬜待處理 ✂️分割中 🔀合併中 ✅已完成
+                </span>
+            </h4>
+            <div className="bg-algo-card/50 border border-algo-border/50 rounded-xl p-4 overflow-x-auto">
+                {depthGroups.map((group, depth) => (
+                    <div key={depth} className="flex justify-center items-center gap-3 mb-3 last:mb-0">
+                        <span className="text-[10px] text-algo-muted/50 w-8 text-right flex-shrink-0">D{depth}</span>
+                        <div className="flex gap-2 flex-wrap justify-center">
+                            {group.map(node => (
+                                <motion.div
+                                    key={node.id}
+                                    initial={{ scale: 0.8, opacity: 0 }}
+                                    animate={{ scale: 1, opacity: 1 }}
+                                    transition={{ duration: 0.3 }}
+                                    style={getNodeStyle(node)}
+                                >
+                                    <span>{statusIcon(node.status)}</span>
+                                    <span>[{node.values.join(', ')}]</span>
+                                </motion.div>
+                            ))}
+                        </div>
+                    </div>
+                ))}
+            </div>
+            {/* Tree legend */}
+            <div className="flex gap-4 text-[10px] text-algo-muted/70 mt-2 justify-center">
+                <span className="flex items-center gap-1">
+                    <span className="w-2 h-2 rounded" style={{ backgroundColor: 'rgba(245,158,11,0.5)', border: '1px solid #f59e0b' }} />
+                    分割中
+                </span>
+                <span className="flex items-center gap-1">
+                    <span className="w-2 h-2 rounded" style={{ backgroundColor: 'rgba(34,211,238,0.5)', border: '1px solid #22d3ee' }} />
+                    合併中
+                </span>
+                <span className="flex items-center gap-1">
+                    <span className="w-2 h-2 rounded" style={{ backgroundColor: 'rgba(74,222,128,0.5)', border: '1px solid #4ade80' }} />
+                    已完成
+                </span>
+            </div>
         </div>
     );
 };
