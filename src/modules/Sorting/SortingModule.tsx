@@ -29,6 +29,7 @@ interface SortStep {
     mergeHighlight?: number; // index currently being placed during merge
     mergeTreeNodes?: MergeTreeNode[];
     activeTreeNodeId?: string;
+    pivotSelectRange?: [number, number]; // range for interactive pivot selection
     description: string;
     pseudocodeLine: number;
     comparisons: number;
@@ -258,17 +259,44 @@ function generateMergeSortSteps(inputArr: number[]): SortStep[] {
     return steps;
 }
 
-function generateQuickSortSteps(inputArr: number[]): SortStep[] {
+function generateQuickSortSteps(inputArr: number[], pivotChoices?: Map<string, number>): SortStep[] {
     const arr = [...inputArr];
     const steps: SortStep[] = [];
     let comparisons = 0, swapCount = 0;
-    steps.push({ array: [...arr], comparing: [], swapping: [], sorted: [], description: '開始 Quick Sort', pseudocodeLine: 0, comparisons: 0, swaps: 0, round: 0 });
+    const isInteractive = pivotChoices !== undefined;
+    steps.push({ array: [...arr], comparing: [], swapping: [], sorted: [], description: isInteractive ? '開始 Quick Sort — 請在每次分區前點選你想要的 Pivot！' : '開始 Quick Sort', pseudocodeLine: 0, comparisons: 0, swaps: 0, round: 0 });
     const finalSorted: Set<number> = new Set();
 
     function quickSort(l: number, r: number, depth: number) {
         if (l >= r) { if (l === r) finalSorted.add(l); return; }
+
+        const rangeKey = `${l}-${r}`;
+
+        // In interactive mode, check if user has chosen a pivot for this range
+        if (isInteractive && !pivotChoices.has(rangeKey)) {
+            // Insert a placeholder step asking user to pick pivot, then stop
+            steps.push({
+                array: [...arr], comparing: [], swapping: [], sorted: [...finalSorted],
+                pivotSelectRange: [l, r],
+                partitionRange: [l, r],
+                description: `👆 請點選範圍 [${l}..${r}] 內的任一元素作為 Pivot`,
+                pseudocodeLine: 1, comparisons, swaps: swapCount, round: depth,
+            });
+            return; // stop recursing — we need the user's choice
+        }
+
+        let pivotIdx = r; // default: last element
+        if (isInteractive && pivotChoices.has(rangeKey)) {
+            pivotIdx = pivotChoices.get(rangeKey)!;
+            if (pivotIdx !== r) {
+                [arr[pivotIdx], arr[r]] = [arr[r], arr[pivotIdx]];
+                swapCount++;
+                steps.push({ array: [...arr], comparing: [], swapping: [pivotIdx, r], sorted: [...finalSorted], partitionRange: [l, r], description: `🎯 將你選的 pivot ${arr[r]} 交換到最右邊`, pseudocodeLine: 1, comparisons, swaps: swapCount, round: depth });
+            }
+        }
+
         const pivotVal = arr[r];
-        steps.push({ array: [...arr], comparing: [], swapping: [], sorted: [...finalSorted], pivot: r, partitionRange: [l, r], description: `選 pivot = arr[${r}] = ${pivotVal}`, pseudocodeLine: 1, comparisons, swaps: swapCount, round: depth });
+        steps.push({ array: [...arr], comparing: [], swapping: [], sorted: [...finalSorted], pivot: r, partitionRange: [l, r], description: `選 pivot = ${pivotVal}`, pseudocodeLine: 1, comparisons, swaps: swapCount, round: depth });
         let i = l;
         for (let j = l; j < r; j++) {
             comparisons++;
@@ -288,7 +316,12 @@ function generateQuickSortSteps(inputArr: number[]): SortStep[] {
         quickSort(i + 1, r, depth + 1);
     }
     quickSort(0, arr.length - 1, 1);
-    steps.push({ array: [...arr], comparing: [], swapping: [], sorted: arr.map((_, i) => i), description: '排序完成！', pseudocodeLine: 5, comparisons, swaps: swapCount, round: 0 });
+
+    // Only add "完成" step if we didn't stop early for pivot selection
+    const lastStep = steps[steps.length - 1];
+    if (!lastStep?.pivotSelectRange) {
+        steps.push({ array: [...arr], comparing: [], swapping: [], sorted: arr.map((_, i) => i), description: '排序完成！', pseudocodeLine: 5, comparisons, swaps: swapCount, round: 0 });
+    }
     return steps;
 }
 
@@ -362,30 +395,88 @@ const SortingModule: React.FC = () => {
     const [speed, setSpeed] = useState(1);
     const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+    // Interactive pivot selection state
+    const [manualPivot, setManualPivot] = useState(false);
+    const [pivotChoices, setPivotChoices] = useState<Map<string, number>>(new Map());
+    const [waitingForPivot, setWaitingForPivot] = useState(false);
+    const [hoveredBar, setHoveredBar] = useState<number | null>(null);
+
     const generateSteps = useCallback((algo: SortAlgorithm, arr: number[]) => {
         const generators: Record<SortAlgorithm, (a: number[]) => SortStep[]> = {
             bubble: generateBubbleSortSteps, selection: generateSelectionSortSteps,
-            merge: generateMergeSortSteps, quick: generateQuickSortSteps,
+            merge: generateMergeSortSteps,
+            quick: (a) => generateQuickSortSteps(a, manualPivot ? new Map() : undefined),
         };
         const s = generators[algo](arr);
         setSteps(s);
         setCurrentStep(0);
         setIsPlaying(false);
-    }, []);
+        setWaitingForPivot(false);
+        setPivotChoices(new Map());
+    }, [manualPivot]);
 
     useEffect(() => { generateSteps(algorithm, inputArray); }, [algorithm, inputArray, generateSteps]);
 
+    // Detect when we hit a pivot_select step
+    useEffect(() => {
+        const s = steps[currentStep];
+        if (s?.pivotSelectRange) {
+            setWaitingForPivot(true);
+            setIsPlaying(false);
+        } else {
+            setWaitingForPivot(false);
+        }
+    }, [currentStep, steps]);
+
+    // Handle user clicking a bar to choose pivot
+    const handlePivotSelect = useCallback((index: number) => {
+        const s = steps[currentStep];
+        if (!s?.pivotSelectRange) return;
+        const [l, r] = s.pivotSelectRange;
+        if (index < l || index > r) return; // out of range
+
+        const newChoices = new Map(pivotChoices);
+        newChoices.set(`${l}-${r}`, index);
+        setPivotChoices(newChoices);
+        setWaitingForPivot(false);
+
+        // Regenerate all steps with accumulated choices
+        const fullSteps = generateQuickSortSteps(inputArray, newChoices);
+        setSteps(fullSteps);
+
+        // Find the step right after processing this range's partition
+        // Look for the next pivotSelectRange step (next unresolved range) or the end
+        const pivotSelectIdx = fullSteps.findIndex(st => st.pivotSelectRange != null);
+        if (pivotSelectIdx >= 0) {
+            // Set to 2 steps before the pivot select so animation plays towards it
+            setCurrentStep(Math.max(0, pivotSelectIdx - 2));
+        } else {
+            // All pivots resolved, set to near the end
+            setCurrentStep(Math.max(0, fullSteps.length - 3));
+        }
+        setIsPlaying(true);
+    }, [currentStep, steps, pivotChoices, inputArray]);
+
     useEffect(() => {
         if (isPlaying && currentStep < steps.length - 1) {
+            // Don't auto-advance past a pivot_select step
+            const nextStep = steps[currentStep + 1];
+            if (nextStep?.pivotSelectRange) {
+                setCurrentStep(prev => prev + 1);
+                setIsPlaying(false);
+                return;
+            }
             intervalRef.current = setInterval(() => {
                 setCurrentStep(prev => {
                     if (prev >= steps.length - 1) { setIsPlaying(false); return prev; }
+                    const next = steps[prev + 1];
+                    if (next?.pivotSelectRange) { setIsPlaying(false); return prev + 1; }
                     return prev + 1;
                 });
             }, 600 / speed);
         }
         return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
-    }, [isPlaying, speed, steps.length, currentStep]);
+    }, [isPlaying, speed, steps.length, currentStep, steps]);
 
     const step = steps[currentStep] || steps[0];
     const maxVal = Math.max(...inputArray, 1);
@@ -398,6 +489,7 @@ const SortingModule: React.FC = () => {
     const handleRandom = () => {
         const len = 8 + Math.floor(Math.random() * 5);
         setInputArray(Array.from({ length: len }, () => Math.floor(Math.random() * 50) + 1));
+        setPivotChoices(new Map());
     };
 
     const getBarColor = (i: number) => {
@@ -460,6 +552,43 @@ const SortingModule: React.FC = () => {
                 </div>
             </div>
 
+            {/* Manual pivot toggle for Quick Sort */}
+            {algorithm === 'quick' && (
+                <div className="flex items-center gap-3">
+                    <button
+                        onClick={() => {
+                            const next = !manualPivot;
+                            setManualPivot(next);
+                            setPivotChoices(new Map());
+                            const s = generateQuickSortSteps(inputArray, next ? new Map() : undefined);
+                            setSteps(s);
+                            setCurrentStep(0);
+                            setIsPlaying(false);
+                        }}
+                        className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all border flex items-center gap-2 ${
+                            manualPivot
+                                ? 'bg-algo-pivot/20 text-algo-pivot border-algo-pivot/50 shadow-lg shadow-algo-pivot/10'
+                                : 'bg-algo-card text-algo-muted border-algo-border hover:text-algo-text'
+                        }`}
+                    >
+                        <span>{manualPivot ? '🎯' : '🖱️'}</span>
+                        自選 Pivot
+                        <span className={`inline-block w-8 h-4 rounded-full relative transition-all ${
+                            manualPivot ? 'bg-algo-pivot/40' : 'bg-algo-border'
+                        }`}>
+                            <span className={`absolute top-0.5 w-3 h-3 rounded-full transition-all ${
+                                manualPivot ? 'left-4 bg-algo-pivot' : 'left-0.5 bg-algo-muted'
+                            }`} />
+                        </span>
+                    </button>
+                    {manualPivot && (
+                        <span className="text-xs text-algo-pivot/80 animate-pulse">
+                            ✨ 開啟中 — 每次分區前可點選元素當 Pivot
+                        </span>
+                    )}
+                </div>
+            )}
+
             {/* Control bar */}
             <ControlBar
                 isPlaying={isPlaying}
@@ -488,33 +617,61 @@ const SortingModule: React.FC = () => {
                     <div className="flex items-end justify-center gap-1.5 h-64 mb-2" id="sort-bar-chart">
                         {step?.array.map((val, i) => {
                             const inMergeRange = step.mergeRange && i >= step.mergeRange[0] && i <= step.mergeRange[1];
+                            const inPivotSelectRange = waitingForPivot && step.pivotSelectRange &&
+                                i >= step.pivotSelectRange[0] && i <= step.pivotSelectRange[1];
+                            const isHoveredPivotCandidate = inPivotSelectRange && hoveredBar === i;
                             return (
                                 <motion.div key={`bar-${i}`}
                                     layout
-                                    className="relative flex flex-col items-center"
+                                    className={`relative flex flex-col items-center ${
+                                        inPivotSelectRange ? 'cursor-pointer' : ''
+                                    }`}
                                     style={{ width: `${Math.max(600 / step.array.length, 24)}px` }}
+                                    onClick={() => inPivotSelectRange && handlePivotSelect(i)}
+                                    onMouseEnter={() => inPivotSelectRange && setHoveredBar(i)}
+                                    onMouseLeave={() => setHoveredBar(null)}
                                 >
                                     <motion.span
                                         key={`val-${i}-${val}`}
                                         initial={{ scale: 1.3, color: '#22d3ee' }}
-                                        animate={{ scale: 1, color: '#8b8aaa' }}
+                                        animate={{
+                                            scale: isHoveredPivotCandidate ? 1.3 : 1,
+                                            color: isHoveredPivotCandidate ? '#a855f7' : '#8b8aaa',
+                                        }}
                                         transition={{ duration: 0.4 }}
                                         className="text-xs font-mono mb-1 font-bold"
                                     >{val}</motion.span>
                                     <motion.div
                                         animate={{
                                             height: `${(val / maxVal) * 200}px`,
-                                            backgroundColor: getBarColor(i),
-                                            boxShadow: step.comparing?.includes(i)
-                                                ? '0 0 12px rgba(245,158,11,0.5)'
-                                                : step.mergeHighlight === i
-                                                    ? '0 0 12px rgba(34,211,238,0.5)'
-                                                    : 'none',
+                                            backgroundColor: isHoveredPivotCandidate ? '#a855f7'
+                                                : inPivotSelectRange ? '#7c3aed'
+                                                : getBarColor(i),
+                                            boxShadow: isHoveredPivotCandidate
+                                                ? '0 0 20px rgba(168,85,247,0.6)'
+                                                : inPivotSelectRange
+                                                    ? '0 0 8px rgba(124,58,237,0.3)'
+                                                    : step.comparing?.includes(i)
+                                                        ? '0 0 12px rgba(245,158,11,0.5)'
+                                                        : step.mergeHighlight === i
+                                                            ? '0 0 12px rgba(34,211,238,0.5)'
+                                                            : 'none',
+                                            scale: isHoveredPivotCandidate ? 1.1 : 1,
                                         }}
                                         transition={{ duration: 0.3, ease: 'easeInOut' }}
-                                        className="w-full rounded-t-md"
+                                        className={`w-full rounded-t-md ${inPivotSelectRange ? 'animate-pulse' : ''}`}
                                     />
                                     <span className="text-[10px] text-algo-muted mt-1 font-mono">{i}</span>
+                                    {/* Pivot select indicator */}
+                                    {inPivotSelectRange && (
+                                        <motion.div
+                                            initial={{ opacity: 0, y: 4 }}
+                                            animate={{ opacity: 1, y: 0 }}
+                                            className="absolute -bottom-6 text-[10px] text-algo-pivot font-bold"
+                                        >
+                                            {isHoveredPivotCandidate ? '🎯' : '·'}
+                                        </motion.div>
+                                    )}
                                     {/* Merge range bracket indicator */}
                                     {algorithm === 'merge' && inMergeRange && (
                                         <motion.div
