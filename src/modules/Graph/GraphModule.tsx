@@ -20,31 +20,33 @@ interface TraversalStep {
 }
 
 // ======== Preset Graphs ========
-const graphNodes: GraphNode[] = [
+const presetGraphNodes: GraphNode[] = [
     { id: 'A', x: 120, y: 60 }, { id: 'B', x: 280, y: 60 },
     { id: 'C', x: 60, y: 180 }, { id: 'D', x: 200, y: 180 },
     { id: 'E', x: 340, y: 180 }, { id: 'F', x: 120, y: 300 },
     { id: 'G', x: 280, y: 300 },
 ];
-const graphEdges: GraphEdge[] = [
+const presetGraphEdges: GraphEdge[] = [
     { from: 'A', to: 'B' }, { from: 'A', to: 'C' }, { from: 'A', to: 'D' },
     { from: 'B', to: 'E' }, { from: 'C', to: 'F' }, { from: 'D', to: 'F' },
     { from: 'D', to: 'G' }, { from: 'E', to: 'G' },
 ];
 
-function getAdj(edges: GraphEdge[], directed: boolean): Record<string, string[]> {
+function getAdj(nodes: GraphNode[], edges: GraphEdge[], directed: boolean): Record<string, string[]> {
     const adj: Record<string, string[]> = {};
-    for (const n of graphNodes) adj[n.id] = [];
+    for (const n of nodes) adj[n.id] = [];
     for (const e of edges) {
-        adj[e.from].push(e.to);
-        if (!directed) adj[e.to].push(e.from);
+        if (!adj[e.from]) adj[e.from] = [];
+        if (!adj[e.to]) adj[e.to] = [];
+        if (!adj[e.from].includes(e.to)) adj[e.from].push(e.to);
+        if (!directed && !adj[e.to].includes(e.from)) adj[e.to].push(e.from);
     }
     return adj;
 }
 
 // ======== DFS steps ========
-function generateDFSSteps(start: string, edges: GraphEdge[]): TraversalStep[] {
-    const adj = getAdj(edges, false);
+function generateDFSSteps(nodes: GraphNode[], start: string, edges: GraphEdge[], directed: boolean): TraversalStep[] {
+    const adj = getAdj(nodes, edges, directed);
     const steps: TraversalStep[] = [];
     const visited = new Set<string>();
     const stack = [start];
@@ -66,8 +68,8 @@ function generateDFSSteps(start: string, edges: GraphEdge[]): TraversalStep[] {
 }
 
 // ======== BFS steps ========
-function generateBFSSteps(start: string, edges: GraphEdge[]): TraversalStep[] {
-    const adj = getAdj(edges, false);
+function generateBFSSteps(nodes: GraphNode[], start: string, edges: GraphEdge[], directed: boolean): TraversalStep[] {
+    const adj = getAdj(nodes, edges, directed);
     const steps: TraversalStep[] = [];
     const visited = new Set<string>([start]);
     const queue = [start];
@@ -146,6 +148,10 @@ const GraphModule: React.FC = () => {
     const [isDirected, setIsDirected] = useState(false);
     const [showMatrix, setShowMatrix] = useState(false);
     const [startNode, setStartNode] = useState('A');
+    const [customNodes, setCustomNodes] = useState<GraphNode[]>(presetGraphNodes);
+    const [customEdges, setCustomEdges] = useState<GraphEdge[]>(presetGraphEdges);
+    const [isEditing, setIsEditing] = useState(false);
+    const [selectedNode, setSelectedNode] = useState<string | null>(null);
 
     // DFS state
     const [dfsSteps, setDfsSteps] = useState<TraversalStep[]>([]);
@@ -164,8 +170,18 @@ const GraphModule: React.FC = () => {
     // Euler state
     const [eulerIdx, setEulerIdx] = useState(0);
 
-    useEffect(() => { setDfsSteps(generateDFSSteps(startNode, graphEdges)); setDfsStep(0); }, [startNode]);
-    useEffect(() => { setBfsSteps(generateBFSSteps(startNode, graphEdges)); setBfsStep(0); }, [startNode]);
+    useEffect(() => { 
+        if (!customNodes.find(n => n.id === startNode)) {
+            if (customNodes.length > 0) setStartNode(customNodes[0].id);
+            return;
+        }
+        setDfsSteps(generateDFSSteps(customNodes, startNode, customEdges, isDirected)); setDfsStep(0); 
+    }, [startNode, customNodes, customEdges, isDirected]);
+
+    useEffect(() => { 
+        if (!customNodes.find(n => n.id === startNode)) return;
+        setBfsSteps(generateBFSSteps(customNodes, startNode, customEdges, isDirected)); setBfsStep(0); 
+    }, [startNode, customNodes, customEdges, isDirected]);
 
     useEffect(() => {
         if (dfsPlaying && dfsStep < dfsSteps.length - 1) {
@@ -185,8 +201,27 @@ const GraphModule: React.FC = () => {
         return () => { if (bfsInterval.current) clearInterval(bfsInterval.current); };
     }, [bfsPlaying, bfsSpeed, bfsSteps.length, bfsStep]);
 
-    const renderGraph = (nodes: GraphNode[], edges: GraphEdge[], step?: TraversalStep, directed?: boolean) => (
-        <svg viewBox="0 0 400 340" className="w-full max-w-[500px] mx-auto">
+    const renderGraph = (nodes: GraphNode[], edges: GraphEdge[], step?: TraversalStep, directed?: boolean, isCustomizing?: boolean) => (
+        <svg viewBox="0 0 400 340" className={`w-full max-w-[500px] mx-auto ${isCustomizing ? 'cursor-crosshair bg-algo-surface/50 border-2 border-dashed border-algo-border rounded-xl' : ''}`}
+            onClick={(e) => {
+                if (!isCustomizing) return;
+                const rect = e.currentTarget.getBoundingClientRect();
+                const x = (e.clientX - rect.left) * (400 / rect.width);
+                const y = (e.clientY - rect.top) * (340 / rect.height);
+                
+                let newId = 'A';
+                for (let i = 0; i < 26; i++) {
+                    const char = String.fromCharCode(65 + i);
+                    if (!customNodes.some(n => n.id === char)) {
+                        newId = char;
+                        break;
+                    }
+                }
+                if (customNodes.length < 26) {
+                    setCustomNodes([...customNodes, { id: newId, x, y }]);
+                }
+            }}
+        >
             {/* Edges */}
             {edges.map((e, i) => {
                 const from = nodes.find(n => n.id === e.from)!;
@@ -203,58 +238,103 @@ const GraphModule: React.FC = () => {
                     }
                 });
 
-                if (edgeCount > 1) {
-                    const dx = to.x - from.x;
-                    const dy = to.y - from.y;
-                    const mx = (from.x + to.x) / 2;
-                    const my = (from.y + to.y) / 2;
-                    const len = Math.sqrt(dx * dx + dy * dy);
-                    const nx = -dy / len;
-                    const ny = dx / len;
-                    // Determine offset multiplier based on parity, so it curves symmetrically
-                    const offset = (edgeIndex - (edgeCount - 1) / 2) * 50;
-                    const cx = mx + nx * offset;
-                    const cy = my + ny * offset;
+                    if (edgeCount > 1) {
+                        const dx = to.x - from.x;
+                        const dy = to.y - from.y;
+                        const mx = (from.x + to.x) / 2;
+                        const my = (from.y + to.y) / 2;
+                        const len = Math.sqrt(dx * dx + dy * dy);
+                        const nx = -dy / len;
+                        const ny = dx / len;
+                        const offsetAmount = (edgeIndex - (edgeCount - 1) / 2) * 50;
+                        const cx = mx + nx * offsetAmount;
+                        const cy = my + ny * offsetAmount;
+                        
+                        // arrowhead angle at `to`
+                        const angle = Math.atan2(to.y - cy, to.x - cx);
+                        const targetX = to.x - 25 * Math.cos(angle);
+                        const targetY = to.y - 25 * Math.sin(angle);
+
+                        return (
+                            <g key={i}>
+                                <path d={`M ${from.x} ${from.y} Q ${cx} ${cy} ${to.x} ${to.y}`} fill="none" stroke="#64748b" strokeWidth="2.5" className="transition-all" />
+                                {directed && (
+                                    <polygon
+                                        points={`${targetX},${targetY} ${targetX - 14},${targetY - 7} ${targetX - 14},${targetY + 7}`}
+                                        fill="#64748b"
+                                        transform={`rotate(${angle * 180 / Math.PI}, ${targetX}, ${targetY})`}
+                                        className="transition-all"
+                                    />
+                                )}
+                            </g>
+                        );
+                    }
+
+                    const angle = Math.atan2(to.y - from.y, to.x - from.x);
+                    const targetX = to.x - 25 * Math.cos(angle);
+                    const targetY = to.y - 25 * Math.sin(angle);
 
                     return (
                         <g key={i}>
-                            <path d={`M ${from.x} ${from.y} Q ${cx} ${cy} ${to.x} ${to.y}`} fill="none" stroke="#475569" strokeWidth="2" />
+                            <line x1={from.x} y1={from.y} x2={to.x} y2={to.y} stroke="#64748b" strokeWidth="2.5" className="transition-all" />
                             {directed && (
                                 <polygon
-                                    points={`${to.x},${to.y} ${to.x - 8},${to.y - 4} ${to.x - 8},${to.y + 4}`}
-                                    fill="#475569"
-                                    transform={`rotate(${Math.atan2(to.y - cy, to.x - cx) * 180 / Math.PI}, ${to.x}, ${to.y})`}
+                                    points={`${targetX},${targetY} ${targetX - 14},${targetY - 7} ${targetX - 14},${targetY + 7}`}
+                                    fill="#64748b"
+                                    transform={`rotate(${angle * 180 / Math.PI}, ${targetX}, ${targetY})`}
+                                    className="transition-all"
                                 />
                             )}
                         </g>
                     );
-                }
-
-                return (
-                    <g key={i}>
-                        <line x1={from.x} y1={from.y} x2={to.x} y2={to.y} stroke="#475569" strokeWidth="2" />
-                        {directed && (
-                            <polygon
-                                points={`${to.x},${to.y} ${to.x - 8},${to.y - 4} ${to.x - 8},${to.y + 4}`}
-                                fill="#475569"
-                                transform={`rotate(${Math.atan2(to.y - from.y, to.x - from.x) * 180 / Math.PI}, ${to.x}, ${to.y})`}
-                            />
-                        )}
-                    </g>
-                );
-            })}
+                })}
             {/* Nodes */}
             {nodes.map(n => {
                 const isVisited = step?.visited.has(n.id);
-                const isCurrent = step?.current === n.id;
+                const isCurrent = isCustomizing ? selectedNode === n.id : step?.current === n.id;
                 const fill = isCurrent ? '#3b82f6' : isVisited ? '#22c55e' : '#334155';
-                const stroke = isCurrent ? '#60a5fa' : isVisited ? '#4ade80' : '#64748b';
+                let stroke = isCurrent ? '#60a5fa' : isVisited ? '#4ade80' : '#64748b';
+                
+                if (isCustomizing && selectedNode && selectedNode !== n.id) {
+                     stroke = '#94a3b8';
+                }
+
                 return (
-                    <g key={n.id} onClick={() => setStartNode(n.id)} className="cursor-pointer">
-                        <circle cx={n.x} cy={n.y} r="22" fill={fill} stroke={stroke} strokeWidth="3" />
+                    <g key={n.id} onClick={(e) => {
+                        if (isCustomizing) {
+                            e.stopPropagation();
+                            if (!selectedNode) {
+                                setSelectedNode(n.id);
+                            } else {
+                                if (selectedNode !== n.id) {
+                                    const exists = customEdges.find(ed => (ed.from === selectedNode && ed.to === n.id) || (!directed && ed.from === n.id && ed.to === selectedNode));
+                                    if (exists) {
+                                        setCustomEdges(customEdges.filter(ed => !((ed.from === selectedNode && ed.to === n.id) || (!directed && ed.from === n.id && ed.to === selectedNode))));
+                                    } else {
+                                        setCustomEdges([...customEdges, { from: selectedNode, to: n.id }]);
+                                    }
+                                }
+                                setSelectedNode(null);
+                            }
+                        } else {
+                            setStartNode(n.id);
+                        }
+                    }} className="cursor-pointer">
+                        <circle cx={n.x} cy={n.y} r="22" fill={fill} stroke={stroke} strokeWidth="3" className="transition-colors" />
                         <text x={n.x} y={n.y + 5} textAnchor="middle" fill="white" fontSize="14" fontWeight="bold">{n.id}</text>
                         {step?.distances && step.distances[n.id] !== undefined && (
                             <text x={n.x} y={n.y + 38} textAnchor="middle" fill="#94a3b8" fontSize="10">d={step.distances[n.id]}</text>
+                        )}
+                        {isCustomizing && (
+                            <g onClick={(e) => {
+                                e.stopPropagation();
+                                setCustomNodes(customNodes.filter(nn => nn.id !== n.id));
+                                setCustomEdges(customEdges.filter(ed => ed.from !== n.id && ed.to !== n.id));
+                                if (selectedNode === n.id) setSelectedNode(null);
+                            }}>
+                                <circle cx={n.x + 18} cy={n.y - 18} r="10" fill="#ef4444" className="hover:fill-red-400 transition-colors" />
+                                <text x={n.x + 18} y={n.y - 14} textAnchor="middle" fill="white" fontSize="12" fontWeight="bold">×</text>
+                            </g>
                         )}
                     </g>
                 );
@@ -298,42 +378,112 @@ const GraphModule: React.FC = () => {
             {/* ===== Concepts ===== */}
             {tab === 'concepts' && (
                 <div className="space-y-4">
-                    <div className="flex gap-3 flex-wrap">
-                        <button onClick={() => setIsDirected(!isDirected)} className="px-4 py-2 rounded-lg text-sm bg-algo-card border border-algo-border text-algo-text">
+                    <div className="flex gap-3 flex-wrap items-center">
+                        <button onClick={() => setIsDirected(!isDirected)} className="px-4 py-2 rounded-lg text-sm bg-algo-card border border-algo-border text-algo-text hover:bg-algo-surface transition-colors">
                             {isDirected ? '有向圖' : '無向圖'} — 點擊切換
                         </button>
-                        <button onClick={() => setShowMatrix(!showMatrix)} className="px-4 py-2 rounded-lg text-sm bg-algo-card border border-algo-border text-algo-text">
+                        <button onClick={() => setShowMatrix(!showMatrix)} className="px-4 py-2 rounded-lg text-sm bg-algo-card border border-algo-border text-algo-text hover:bg-algo-surface transition-colors">
                             {showMatrix ? '相鄰矩陣' : '相鄰串列'} — 點擊切換
                         </button>
+                        <div className="w-px h-6 bg-algo-border mx-1 hidden sm:block"></div>
+                        <button onClick={() => { setIsEditing(!isEditing); setSelectedNode(null); }} className={`px-4 py-2 rounded-lg text-sm transition-colors border font-bold ${isEditing ? 'bg-algo-comparing text-white border-algo-comparing' : 'bg-algo-card text-algo-text border-algo-border hover:border-algo-comparing/50'}`}>
+                            {isEditing ? '✓ 完成建圖' : '✏️ 自己建圖'}
+                        </button>
+                        {isEditing && (
+                            <>
+                                <button onClick={() => { setCustomNodes([]); setCustomEdges([]); setSelectedNode(null); }} className="px-3 py-2 rounded-lg text-sm bg-algo-error/10 text-algo-error border border-algo-error/30 hover:bg-algo-error/20 transition-colors">
+                                    清空這張圖
+                                </button>
+                                <button onClick={() => { setCustomNodes(presetGraphNodes); setCustomEdges(presetGraphEdges); setSelectedNode(null); }} className="px-3 py-2 rounded-lg text-sm bg-algo-card border border-algo-border text-algo-text hover:bg-algo-surface transition-colors">
+                                    重置預設圖
+                                </button>
+                            </>
+                        )}
                     </div>
+                    
+                    {isEditing && (
+                        <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="bg-algo-comparing/10 border border-algo-comparing/30 rounded-xl p-3 text-sm text-algo-text flex items-center gap-2">
+                            <span>💡 <span className="font-bold text-algo-comparing">建圖模式：</span>點擊空白處新增節點；點擊紅色「×」刪除節點；<span className="font-bold">點擊兩節點</span>建立/取消邊。</span>
+                        </motion.div>
+                    )}
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="bg-algo-surface border border-algo-border rounded-2xl p-4">
-                            {renderGraph(graphNodes, graphEdges, undefined, isDirected)}
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <div className="bg-algo-surface border border-algo-border rounded-2xl p-4 flex items-center justify-center shadow-sm">
+                            {renderGraph(customNodes, customEdges, undefined, isDirected, isEditing)}
                         </div>
-                        <div className="bg-algo-surface border border-algo-border rounded-2xl p-4 overflow-x-auto">
-                            <h3 className="font-bold text-algo-accent mb-3">{showMatrix ? '相鄰矩陣 Adjacency Matrix' : '相鄰串列 Adjacency List'}</h3>
+                        <div className="bg-algo-surface border border-algo-border rounded-2xl p-6 flex flex-col shadow-sm">
+                            <h3 className="text-xl font-bold text-algo-accent mb-5 flex items-center gap-2">
+                                <span>{showMatrix ? '🧮 相鄰矩陣 Adjacency Matrix' : '🔗 相鄰串列 Adjacency List'}</span>
+                            </h3>
                             {showMatrix ? (
-                                <table className="text-xs font-mono">
-                                    <thead><tr><th className="px-2 py-1" /></tr></thead>
-                                    <tbody>
-                                        <tr><td className="px-2" />{graphNodes.map(n => <td key={n.id} className="px-2 text-center text-algo-muted font-bold">{n.id}</td>)}</tr>
-                                        {graphNodes.map(from => (
-                                            <tr key={from.id}>
-                                                <td className="px-2 text-algo-muted font-bold">{from.id}</td>
-                                                {graphNodes.map(to => {
-                                                    const hasEdge = graphEdges.some(e => (e.from === from.id && e.to === to.id) || (!isDirected && e.from === to.id && e.to === from.id));
-                                                    return <td key={to.id} className={`px-2 text-center ${hasEdge ? 'text-algo-done font-bold' : 'text-algo-muted/30'}`}>{hasEdge ? 1 : 0}</td>;
-                                                })}
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
+                                <div className="space-y-4 flex-1 flex flex-col justify-between">
+                                    <div className="overflow-x-auto pb-2">
+                                        <table className="w-full text-base font-mono border-collapse">
+                                            <thead>
+                                                <tr>
+                                                    <th className="p-2 border border-algo-border/50 bg-algo-card/50 rounded-tl-lg"></th>
+                                                    {customNodes.map(n => <th key={n.id} className="p-2 border border-algo-border/50 bg-algo-card/50 text-algo-accent font-bold min-w-[40px]">{n.id}</th>)}
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {customNodes.map(from => (
+                                                    <tr key={from.id} className="hover:bg-algo-card/30 transition-colors">
+                                                        <th className="p-2 border border-algo-border/50 bg-algo-card/50 text-algo-accent font-bold">{from.id}</th>
+                                                        {customNodes.map(to => {
+                                                            const hasEdge = customEdges.some(e => (e.from === from.id && e.to === to.id) || (!isDirected && e.from === to.id && e.to === from.id));
+                                                            return (
+                                                                <td key={to.id} className={`p-2 border border-algo-border/50 text-center xl:text-lg ${hasEdge ? 'text-algo-done font-bold bg-algo-done/10 shadow-[inset_0_0_8px_rgba(34,197,94,0.15)]' : 'text-algo-muted/30'}`}>
+                                                                    {hasEdge ? 1 : 0}
+                                                                </td>
+                                                            );
+                                                        })}
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                    <div className="bg-algo-hero/30 p-4 rounded-xl border border-algo-border text-sm text-algo-text shadow-sm mt-4">
+                                        <p className="font-semibold text-algo-accent mb-2 border-b border-algo-border/50 pb-1">📝 矩陣說明：</p>
+                                        <ul className="list-disc list-inside space-y-1.5 text-algo-muted">
+                                            <li>使用 <span className="font-mono text-algo-text bg-algo-surface px-1.5 py-0.5 rounded shadow-sm border border-algo-border/50">V × V</span> 的二維陣列（V為節點數）。</li>
+                                            <li>若 <span className="font-mono text-algo-text">i</span> 到 <span className="font-mono text-algo-text">j</span> 有邊，設為 <span className="font-mono text-algo-text">1</span>，否則為 <span className="font-mono text-algo-text">0</span>。</li>
+                                            <li><span className="text-algo-done font-semibold">優點：</span>快速判斷任意兩點是否相連（O(1)）。</li>
+                                            <li><span className="text-algo-error font-semibold">缺點：</span>非常耗費空間O(V²)，不適合「稀疏圖」。</li>
+                                        </ul>
+                                    </div>
+                                </div>
                             ) : (
-                                <div className="space-y-1 text-sm font-mono">
-                                    {Object.entries(getAdj(graphEdges, isDirected)).map(([node, neighbors]) => (
-                                        <div key={node}><span className="text-algo-accent font-bold">{node}</span> → [{neighbors.join(', ')}]</div>
-                                    ))}
+                                <div className="space-y-4 flex-1 flex flex-col justify-between">
+                                    <div className="space-y-3 font-mono overflow-y-auto pr-2" style={{ maxHeight: '380px' }}>
+                                        {Object.entries(getAdj(customNodes, customEdges, isDirected)).map(([node, neighbors]) => (
+                                            <div key={node} className="flex items-center gap-3">
+                                                <div className="flex-shrink-0 w-11 h-11 flex items-center justify-center rounded-xl bg-algo-accent text-white font-bold text-xl shadow-lg shadow-algo-accent/20">
+                                                    {node}
+                                                </div>
+                                                <div className="text-algo-muted">➔</div>
+                                                <div className="flex flex-wrap gap-2 items-center">
+                                                    {neighbors.length > 0 ? neighbors.map((n, i) => (
+                                                        <React.Fragment key={`${node}-${n}-${i}`}>
+                                                            <div className="px-3.5 py-1.5 rounded-lg border-2 border-algo-done/40 bg-algo-done/10 text-algo-text font-bold text-lg hover:border-algo-done hover:bg-algo-done/20 transition-all shadow-sm">
+                                                                {n}
+                                                            </div>
+                                                            {i < neighbors.length - 1 && <span className="text-algo-muted self-center text-sm">→</span>}
+                                                        </React.Fragment>
+                                                    )) : (
+                                                        <span className="px-4 py-1.5 rounded-lg border-2 border-dashed border-algo-border text-algo-muted text-sm italic items-center flex shadow-inner">null</span>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                    <div className="bg-algo-hero/30 p-4 rounded-xl border border-algo-border text-sm text-algo-text shadow-sm mt-4">
+                                        <p className="font-semibold text-algo-accent mb-2 border-b border-algo-border/50 pb-1">📝 串列說明：</p>
+                                        <ul className="list-disc list-inside space-y-1.5 text-algo-muted">
+                                            <li>為每個節點建立一個列表，記錄能直接到達的鄰居。</li>
+                                            <li><span className="text-algo-done font-semibold">優點：</span>節省空間 O(V+E)，只存真實存在的邊；能極快走訪某點的所有鄰居。</li>
+                                            <li><span className="text-algo-error font-semibold">缺點：</span>判斷相連時需循序搜尋鄰居列表（較慢）。</li>
+                                        </ul>
+                                    </div>
                                 </div>
                             )}
                         </div>
@@ -362,7 +512,7 @@ const GraphModule: React.FC = () => {
                     <ControlBar isPlaying={dfsPlaying} onPlay={() => setDfsPlaying(true)} onPause={() => setDfsPlaying(false)}
                         onNextStep={() => setDfsStep(s => Math.min(s + 1, dfsSteps.length - 1))}
                         onPrevStep={() => setDfsStep(s => Math.max(s - 1, 0))}
-                        onReset={() => { setDfsSteps(generateDFSSteps(startNode, graphEdges)); setDfsStep(0); }}
+                        onReset={() => { setDfsSteps(generateDFSSteps(customNodes, startNode, customEdges, isDirected)); setDfsStep(0); }}
                         speed={dfsSpeed} onSpeedChange={setDfsSpeed} currentStep={dfsStep} totalSteps={dfsSteps.length - 1} />
 
                     {isTeachingMode && curDfs && (
@@ -374,7 +524,7 @@ const GraphModule: React.FC = () => {
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="bg-algo-surface border border-algo-border rounded-2xl p-4">
-                            {renderGraph(graphNodes, graphEdges, curDfs)}
+                            {renderGraph(customNodes, customEdges, curDfs, isDirected)}
                         </div>
                         <div className="space-y-3">
                             <div className="bg-algo-surface border border-algo-border rounded-xl p-4">
@@ -411,7 +561,7 @@ const GraphModule: React.FC = () => {
                     <ControlBar isPlaying={bfsPlaying} onPlay={() => setBfsPlaying(true)} onPause={() => setBfsPlaying(false)}
                         onNextStep={() => setBfsStep(s => Math.min(s + 1, bfsSteps.length - 1))}
                         onPrevStep={() => setBfsStep(s => Math.max(s - 1, 0))}
-                        onReset={() => { setBfsSteps(generateBFSSteps(startNode, graphEdges)); setBfsStep(0); }}
+                        onReset={() => { setBfsSteps(generateBFSSteps(customNodes, startNode, customEdges, isDirected)); setBfsStep(0); }}
                         speed={bfsSpeed} onSpeedChange={setBfsSpeed} currentStep={bfsStep} totalSteps={bfsSteps.length - 1} />
 
                     {isTeachingMode && curBfs && (
@@ -423,7 +573,7 @@ const GraphModule: React.FC = () => {
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="bg-algo-surface border border-algo-border rounded-2xl p-4">
-                            {renderGraph(graphNodes, graphEdges, curBfs)}
+                            {renderGraph(customNodes, customEdges, curBfs, isDirected)}
                         </div>
                         <div className="space-y-3">
                             <div className="bg-algo-surface border border-algo-border rounded-xl p-4">
