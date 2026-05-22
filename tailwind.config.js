@@ -4,24 +4,25 @@ export default {
         "./index.html",
         "./src/**/*.{js,ts,jsx,tsx}",
     ],
+    darkMode: 'class',
     theme: {
         extend: {
             colors: {
-                // IlluMinate mystical palette
-                'algo-bg': '#0d0f1a',          // Deep midnight navy
-                'algo-surface': '#181c30',      // Dark indigo surface
-                'algo-card': '#252a4a',         // Elevated card (brighter)
-                'algo-border': '#4a4f7a',       // Visible indigo border (brightened)
-                'algo-text': '#e8e6f0',         // Soft cream white
-                'algo-muted': '#8b8aaa',        // Muted lavender
-                'algo-processing': '#5b8def',   // Arcane blue
-                'algo-done': '#4ade80',         // Rune green
-                'algo-comparing': '#f59e0b',    // Lantern amber
-                'algo-error': '#ef4444',        // Crimson
-                'algo-pivot': '#a78bfa',        // Mystic purple
-                'algo-accent': '#22d3ee',       // Cyan glow
-                'algo-gold': '#d4a853',         // Lantern gold
-                'algo-warm': '#e8b04a',         // Warm amber glow
+                // Theme-aware via CSS variables (see index.css :root / .light)
+                'algo-bg':         'rgb(var(--algo-bg) / <alpha-value>)',
+                'algo-surface':    'rgb(var(--algo-surface) / <alpha-value>)',
+                'algo-card':       'rgb(var(--algo-card) / <alpha-value>)',
+                'algo-border':     'rgb(var(--algo-border) / <alpha-value>)',
+                'algo-text':       'rgb(var(--algo-text) / <alpha-value>)',
+                'algo-muted':      'rgb(var(--algo-muted) / <alpha-value>)',
+                'algo-processing': 'rgb(var(--algo-processing) / <alpha-value>)',
+                'algo-done':       'rgb(var(--algo-done) / <alpha-value>)',
+                'algo-comparing':  'rgb(var(--algo-comparing) / <alpha-value>)',
+                'algo-error':      'rgb(var(--algo-error) / <alpha-value>)',
+                'algo-pivot':      'rgb(var(--algo-pivot) / <alpha-value>)',
+                'algo-accent':     'rgb(var(--algo-accent) / <alpha-value>)',
+                'algo-gold':       'rgb(var(--algo-gold) / <alpha-value>)',
+                'algo-warm':       'rgb(var(--algo-warm) / <alpha-value>)',
             },
             fontFamily: {
                 'display': ['Inter', 'Noto Sans TC', 'sans-serif'],
@@ -29,14 +30,14 @@ export default {
                 'mono': ['JetBrains Mono', 'Fira Code', 'monospace'],
             },
             backgroundImage: {
-                'illuminate-gradient': 'linear-gradient(135deg, #0d0f1a 0%, #1a1640 30%, #0d0f1a 60%, #151230 100%)',
-                'card-glow': 'linear-gradient(135deg, rgba(167, 139, 250, 0.08), rgba(34, 211, 238, 0.05))',
-                'gold-glow': 'radial-gradient(ellipse at center, rgba(212, 168, 83, 0.15) 0%, transparent 70%)',
+                'illuminate-gradient': 'linear-gradient(135deg, rgb(var(--algo-bg)) 0%, rgb(var(--algo-surface)) 50%, rgb(var(--algo-bg)) 100%)',
+                'card-glow': 'linear-gradient(135deg, rgb(var(--algo-pivot) / 0.08), rgb(var(--algo-accent) / 0.05))',
+                'gold-glow': 'radial-gradient(ellipse at center, rgb(var(--algo-gold) / 0.15) 0%, transparent 70%)',
             },
             boxShadow: {
-                'lantern': '0 0 60px rgba(212, 168, 83, 0.15), 0 0 120px rgba(212, 168, 83, 0.05)',
-                'rune': '0 0 20px rgba(167, 139, 250, 0.2)',
-                'glow-cyan': '0 0 20px rgba(34, 211, 238, 0.2)',
+                'lantern': '0 0 60px rgb(var(--algo-gold) / 0.15), 0 0 120px rgb(var(--algo-gold) / 0.05)',
+                'rune': '0 0 20px rgb(var(--algo-pivot) / 0.2)',
+                'glow-cyan': '0 0 20px rgb(var(--algo-accent) / 0.2)',
             },
             animation: {
                 'float': 'float 6s ease-in-out infinite',
