@@ -1,9 +1,42 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { useTeachingMode } from '../../context/TeachingModeContext';
+import { useTheme } from '../../context/ThemeContext';
 import ControlBar from '../../components/ControlBar';
 import PseudocodeDisplay from '../../components/PseudocodeDisplay';
 import AlgorithmInfoCard from '../../components/AlgorithmInfoCard';
+
+// Theme-aware palette for inline-animated DP cells.
+// Dark = lit lantern (vivid on indigo); Light = warm parchment (saturated colors stay,
+// empty cells become soft beige so the table doesn't read as a dark island.)
+type DPPalette = {
+    highlight: string; highlightBorder: string;
+    done: string; doneBorder: string;
+    source: string; sourceBorder: string;
+    empty: string; emptyBorder: string;
+    valueText: string; emptyText: string; labelText: string;
+};
+
+const DP_PALETTE: Record<'dark' | 'light', DPPalette> = {
+    dark: {
+        highlight: '#3b82f6', highlightBorder: '#60a5fa',
+        done: '#22c55e',      doneBorder: '#4ade80',
+        source: '#a855f7',    sourceBorder: '#c084fc',
+        empty: '#334155',     emptyBorder: '#475569',
+        valueText: '#ffffff',
+        emptyText: 'rgba(232,230,240,0.45)',
+        labelText: 'rgba(232,230,240,0.7)',
+    },
+    light: {
+        highlight: '#2563eb', highlightBorder: '#1d4ed8',
+        done: '#15803d',      doneBorder: '#166534',
+        source: '#7c3aed',    sourceBorder: '#6d28d9',
+        empty: '#ede4ca',     emptyBorder: '#c6ba9a',
+        valueText: '#ffffff',
+        emptyText: 'rgba(36,32,56,0.45)',
+        labelText: 'rgba(36,32,56,0.7)',
+    },
+};
 
 // ==================== Climbing Stairs ====================
 interface StairStep {
@@ -151,6 +184,8 @@ type DPTab = 'stairs' | 'knapsack';
 
 const DPModule: React.FC = () => {
     const { isTeachingMode } = useTeachingMode();
+    const { theme } = useTheme();
+    const pal = DP_PALETTE[theme];
     const [tab, setTab] = useState<DPTab>('stairs');
 
     // Stairs state
@@ -264,18 +299,27 @@ const DPModule: React.FC = () => {
                     <div className="bg-algo-surface border border-algo-border rounded-2xl p-6">
                         <h3 className="font-bold text-algo-accent mb-4">dp 陣列填表過程</h3>
                         <div className="flex gap-2 flex-wrap justify-center">
-                            {curStair?.dp.map((val, i) => (
-                                <motion.div key={i}
-                                    animate={{
-                                        backgroundColor: i === curStair.highlightIdx ? '#3b82f6' : val > 0 ? '#22c55e' : '#334155',
-                                        scale: i === curStair.highlightIdx ? 1.1 : 1,
-                                    }}
-                                    className="w-16 h-16 rounded-xl flex flex-col items-center justify-center border border-algo-border"
-                                >
-                                    <span className="text-[10px] text-algo-muted">dp[{i}]</span>
-                                    <span className="text-lg font-bold">{val}</span>
-                                </motion.div>
-                            ))}
+                            {curStair?.dp.map((val, i) => {
+                                const isHi = i === curStair.highlightIdx;
+                                const hasVal = val > 0;
+                                const bg = isHi ? pal.highlight : hasVal ? pal.done : pal.empty;
+                                const border = isHi ? pal.highlightBorder : hasVal ? pal.doneBorder : pal.emptyBorder;
+                                const fg = (isHi || hasVal) ? pal.valueText : pal.emptyText;
+                                const labelFg = (isHi || hasVal) ? 'rgba(255,255,255,0.75)' : pal.labelText;
+                                return (
+                                    <motion.div key={i}
+                                        animate={{
+                                            backgroundColor: bg,
+                                            borderColor: border,
+                                            scale: isHi ? 1.1 : 1,
+                                        }}
+                                        className="w-16 h-16 rounded-xl flex flex-col items-center justify-center border-2"
+                                    >
+                                        <span className="text-[10px]" style={{ color: labelFg }}>dp[{i}]</span>
+                                        <span className="text-lg font-bold" style={{ color: fg }}>{val}</span>
+                                    </motion.div>
+                                );
+                            })}
                         </div>
 
                         <div className="mt-4 text-center text-sm text-algo-muted">
@@ -446,30 +490,36 @@ const DPModule: React.FC = () => {
                                         const isHighlight = curKnapsack1D.highlightW === w;
                                         const isCompare = curKnapsack1D.compareW === w;
                                         const isFinal = w === knapsackW && knapsack1DStep === knapsack1DSteps.length - 1;
-                                        
-                                        let bg = val > 0 ? '#22c55e' : '#334155';
-                                        let border = '#475569';
-                                        
-                                        if (isHighlight) { bg = '#3b82f6'; border = '#60a5fa'; }
-                                        else if (isCompare) { bg = '#a855f7'; border = '#c084fc'; }
-                                        else if (isFinal) { bg = '#22c55e'; border = '#4ade80'; }
-                                        
+                                        const hasVal = val > 0;
+
+                                        let bg = hasVal ? pal.done : pal.empty;
+                                        let border = pal.emptyBorder;
+                                        let filled = hasVal;
+
+                                        if (isHighlight)      { bg = pal.highlight; border = pal.highlightBorder; filled = true; }
+                                        else if (isCompare)   { bg = pal.source;    border = pal.sourceBorder;    filled = true; }
+                                        else if (isFinal)     { bg = pal.done;      border = pal.doneBorder;      filled = true; }
+                                        else if (hasVal)      { border = pal.doneBorder; }
+
+                                        const fg = filled ? pal.valueText : pal.emptyText;
+                                        const labelFg = filled ? 'rgba(255,255,255,0.7)' : pal.labelText;
+
                                         return (
                                             <motion.div key={w}
                                                 animate={{ backgroundColor: bg, borderColor: border, scale: isHighlight || isCompare ? 1.05 : 1 }}
-                                                className="w-16 h-16 rounded-xl flex flex-col items-center justify-center border-2 border-algo-border shadow-sm text-white relative transition-all"
+                                                className="w-16 h-16 rounded-xl flex flex-col items-center justify-center border-2 shadow-sm relative transition-all"
                                             >
-                                                <span className="text-[10px] text-white/70 absolute top-1 font-mono">w={w}</span>
-                                                <span className="text-xl font-bold mt-1">{val}</span>
+                                                <span className="text-[10px] absolute top-1 font-mono" style={{ color: labelFg }}>w={w}</span>
+                                                <span className="text-xl font-bold mt-1" style={{ color: fg }}>{val}</span>
                                             </motion.div>
                                         );
                                     })}
                                 </div>
                             </div>
-                            <div className="flex gap-4 mb-4 text-xs font-mono text-algo-text">
-                                <div className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-[#3b82f6]"></span> 當前更新格子</div>
-                                <div className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-[#a855f7]"></span> 給定價值的來源格子</div>
-                                <div className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-[#22c55e]"></span> 記錄過價值的格子</div>
+                            <div className="flex gap-4 mb-4 text-xs font-mono text-algo-text flex-wrap justify-center">
+                                <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full border" style={{ backgroundColor: pal.highlight, borderColor: pal.highlightBorder }} /> 當前更新格子</div>
+                                <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full border" style={{ backgroundColor: pal.source, borderColor: pal.sourceBorder }} /> 給定價值的來源格子</div>
+                                <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full border" style={{ backgroundColor: pal.done, borderColor: pal.doneBorder }} /> 記錄過價值的格子</div>
                             </div>
                             <div className="mt-2 text-base font-medium text-algo-text text-center bg-algo-card/60 px-6 py-3 rounded-xl border border-algo-border/60 w-full max-w-3xl shadow-sm whitespace-pre-wrap">
                                 {activeKnapsackDesc}
