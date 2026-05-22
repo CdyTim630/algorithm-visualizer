@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { useTeachingMode } from '../../context/TeachingModeContext';
+import { useGraphPalette } from '../../lib/graphTheme';
 import ControlBar from '../../components/ControlBar';
 import PseudocodeDisplay from '../../components/PseudocodeDisplay';
 import AlgorithmInfoCard from '../../components/AlgorithmInfoCard';
@@ -144,6 +145,7 @@ const bfsPseudocode = ['queue.enqueue(start)', 'while queue not empty:', '  node
 
 const GraphModule: React.FC = () => {
     const { isTeachingMode } = useTeachingMode();
+    const pal = useGraphPalette();
     const [tab, setTab] = useState<GraphTab>('concepts');
     const [isDirected, setIsDirected] = useState(false);
     const [showMatrix, setShowMatrix] = useState(false);
@@ -257,11 +259,11 @@ const GraphModule: React.FC = () => {
 
                         return (
                             <g key={i}>
-                                <path d={`M ${from.x} ${from.y} Q ${cx} ${cy} ${to.x} ${to.y}`} fill="none" stroke="#64748b" strokeWidth="2.5" className="transition-all" />
+                                <path d={`M ${from.x} ${from.y} Q ${cx} ${cy} ${to.x} ${to.y}`} fill="none" stroke={pal.edge} strokeWidth="2.5" className="transition-all" />
                                 {directed && (
                                     <polygon
                                         points={`${targetX},${targetY} ${targetX - 14},${targetY - 7} ${targetX - 14},${targetY + 7}`}
-                                        fill="#64748b"
+                                        fill={pal.edge}
                                         transform={`rotate(${angle * 180 / Math.PI}, ${targetX}, ${targetY})`}
                                         className="transition-all"
                                     />
@@ -276,11 +278,11 @@ const GraphModule: React.FC = () => {
 
                     return (
                         <g key={i}>
-                            <line x1={from.x} y1={from.y} x2={to.x} y2={to.y} stroke="#64748b" strokeWidth="2.5" className="transition-all" />
+                            <line x1={from.x} y1={from.y} x2={to.x} y2={to.y} stroke={pal.edge} strokeWidth="2.5" className="transition-all" />
                             {directed && (
                                 <polygon
                                     points={`${targetX},${targetY} ${targetX - 14},${targetY - 7} ${targetX - 14},${targetY + 7}`}
-                                    fill="#64748b"
+                                    fill={pal.edge}
                                     transform={`rotate(${angle * 180 / Math.PI}, ${targetX}, ${targetY})`}
                                     className="transition-all"
                                 />
@@ -292,11 +294,11 @@ const GraphModule: React.FC = () => {
             {nodes.map(n => {
                 const isVisited = step?.visited.has(n.id);
                 const isCurrent = isCustomizing ? selectedNode === n.id : step?.current === n.id;
-                const fill = isCurrent ? '#3b82f6' : isVisited ? '#22c55e' : '#334155';
-                let stroke = isCurrent ? '#60a5fa' : isVisited ? '#4ade80' : '#64748b';
-                
+                const fill = isCurrent ? pal.nodeCurrent : isVisited ? pal.nodeVisited : pal.nodeFill;
+                let stroke = isCurrent ? pal.nodeCurrentStroke : isVisited ? pal.nodeVisitedStroke : pal.nodeStroke;
+
                 if (isCustomizing && selectedNode && selectedNode !== n.id) {
-                     stroke = '#94a3b8';
+                    stroke = pal.nodeStrokeMuted;
                 }
 
                 return (
@@ -321,9 +323,9 @@ const GraphModule: React.FC = () => {
                         }
                     }} className="cursor-pointer">
                         <circle cx={n.x} cy={n.y} r="22" fill={fill} stroke={stroke} strokeWidth="3" className="transition-colors" />
-                        <text x={n.x} y={n.y + 5} textAnchor="middle" fill="white" fontSize="14" fontWeight="bold">{n.id}</text>
+                        <text x={n.x} y={n.y + 5} textAnchor="middle" fill={pal.onNodeText} fontSize="14" fontWeight="bold">{n.id}</text>
                         {step?.distances && step.distances[n.id] !== undefined && (
-                            <text x={n.x} y={n.y + 38} textAnchor="middle" fill="#94a3b8" fontSize="10">d={step.distances[n.id]}</text>
+                            <text x={n.x} y={n.y + 38} textAnchor="middle" fill={pal.label} fontSize="10">d={step.distances[n.id]}</text>
                         )}
                         {isCustomizing && (
                             <g onClick={(e) => {

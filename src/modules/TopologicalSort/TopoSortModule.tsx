@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { useTeachingMode } from '../../context/TeachingModeContext';
+import { useGraphPalette } from '../../lib/graphTheme';
 import ControlBar from '../../components/ControlBar';
 import PseudocodeDisplay from '../../components/PseudocodeDisplay';
 import AlgorithmInfoCard from '../../components/AlgorithmInfoCard';
@@ -158,6 +159,7 @@ const pseudocode = [
 
 const TopoSortModule: React.FC = () => {
     const { isTeachingMode } = useTeachingMode();
+    const pal = useGraphPalette();
     const [graphIdx, setGraphIdx] = useState(0);
     const graph = presetGraphs[graphIdx];
     const [steps, setSteps] = useState<TopoStep[]>([]);
@@ -227,11 +229,11 @@ const TopoSortModule: React.FC = () => {
                             return (
                                 <g key={i}>
                                     <line x1={from.x} y1={from.y} x2={to.x} y2={to.y}
-                                        stroke={isRemoved ? '#475569' : '#64748b'} strokeWidth="2"
+                                        stroke={isRemoved ? pal.nodeRemovedStroke : pal.edge} strokeWidth="2"
                                         strokeDasharray={isRemoved ? '4,4' : ''} opacity={isRemoved ? 0.3 : 1} />
                                     {!isRemoved && (
                                         <polygon points={`${ax},${ay} ${ax - uy * 6 - ux * 8},${ay + ux * 6 - uy * 8} ${ax + uy * 6 - ux * 8},${ay - ux * 6 - uy * 8}`}
-                                            fill="#64748b" />
+                                            fill={pal.edge} />
                                     )}
                                 </g>
                             );
@@ -241,12 +243,19 @@ const TopoSortModule: React.FC = () => {
                             const inResult = step?.result.includes(n.id);
                             const isCurrent = step?.current === n.id;
                             const inQueue = step?.queue.includes(n.id);
-                            const fill = isCurrent ? '#3b82f6' : inResult ? '#22c55e' : inQueue ? '#f97316' : '#334155';
+                            const fill = isCurrent ? pal.nodeCurrent
+                                : inResult ? pal.nodeResult
+                                : inQueue ? pal.nodeQueue
+                                : pal.nodeFill;
+                            const stroke = isCurrent ? pal.nodeCurrentStroke
+                                : inResult ? pal.nodeResultStroke
+                                : inQueue ? pal.nodeQueueStroke
+                                : pal.nodeStroke;
                             return (
                                 <g key={n.id}>
-                                    <circle cx={n.x} cy={n.y} r="26" fill={fill} stroke={isCurrent ? '#93c5fd' : '#64748b'} strokeWidth="2.5" />
-                                    <text x={n.x} y={n.y - 4} textAnchor="middle" fill="white" fontSize="10" fontWeight="600">{n.label}</text>
-                                    <text x={n.x} y={n.y + 10} textAnchor="middle" fill="rgba(255,255,255,0.7)" fontSize="9">
+                                    <circle cx={n.x} cy={n.y} r="26" fill={fill} stroke={stroke} strokeWidth="2.5" />
+                                    <text x={n.x} y={n.y - 4} textAnchor="middle" fill={pal.onNodeText} fontSize="10" fontWeight="600">{n.label}</text>
+                                    <text x={n.x} y={n.y + 10} textAnchor="middle" fill="rgba(255,255,255,0.75)" fontSize="9">
                                         in:{step?.indegree[n.id] ?? '?'}
                                     </text>
                                 </g>

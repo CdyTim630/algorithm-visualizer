@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { useTeachingMode } from '../../context/TeachingModeContext';
+import { useGraphPalette } from '../../lib/graphTheme';
 import ControlBar from '../../components/ControlBar';
 import PseudocodeDisplay from '../../components/PseudocodeDisplay';
 import AlgorithmInfoCard from '../../components/AlgorithmInfoCard';
@@ -114,6 +115,7 @@ const pseudocode = [
 
 const DijkstraModule: React.FC = () => {
     const { isTeachingMode } = useTeachingMode();
+    const pal = useGraphPalette();
     const [graphIdx, setGraphIdx] = useState(0);
     const graph = presetGraphs[graphIdx];
     const [startNode, setStartNode] = useState(graph.nodes[0].id);
@@ -190,9 +192,9 @@ const DijkstraModule: React.FC = () => {
                             return (
                                 <g key={i}>
                                     <line x1={from.x} y1={from.y} x2={to.x} y2={to.y}
-                                        stroke={isOnPath ? '#22c55e' : '#475569'} strokeWidth={isOnPath ? 3.5 : 2} />
-                                    <circle cx={mx} cy={my} r="12" fill="#1e293b" />
-                                    <text x={mx} y={my + 4} textAnchor="middle" fill={isOnPath ? '#22c55e' : '#94a3b8'} fontSize="11" fontWeight="bold">{e.weight}</text>
+                                        stroke={isOnPath ? pal.nodeResult : pal.edge} strokeWidth={isOnPath ? 3.5 : 2} />
+                                    <circle cx={mx} cy={my} r="12" fill={pal.edgeWeightBg} stroke={pal.edge} strokeWidth="1" />
+                                    <text x={mx} y={my + 4} textAnchor="middle" fill={isOnPath ? pal.edgeWeightOnPath : pal.edgeWeightText} fontSize="11" fontWeight="bold">{e.weight}</text>
                                 </g>
                             );
                         })}
@@ -202,13 +204,21 @@ const DijkstraModule: React.FC = () => {
                             const isCurrent = step?.current === n.id;
                             const isRelaxing = step?.relaxing === n.id;
                             const isOnPath = step?.shortestPath.includes(n.id);
-                            const fill = isCurrent ? '#3b82f6' : isRelaxing ? '#f97316' : isOnPath ? '#22c55e' : isVisited ? '#22c55e' : '#334155';
+                            const fill = isCurrent ? pal.nodeCurrent
+                                : isRelaxing ? pal.nodeQueue
+                                : isOnPath ? pal.nodeResult
+                                : isVisited ? pal.nodeVisited
+                                : pal.nodeFill;
+                            const stroke = isCurrent ? pal.nodeCurrentStroke
+                                : isRelaxing ? pal.nodeQueueStroke
+                                : (isOnPath || isVisited) ? pal.nodeVisitedStroke
+                                : pal.nodeStroke;
                             const d = step?.dist[n.id];
                             return (
                                 <g key={n.id} onClick={() => setStartNode(n.id)} className="cursor-pointer">
-                                    <circle cx={n.x} cy={n.y} r="24" fill={fill} stroke={isCurrent ? '#93c5fd' : '#64748b'} strokeWidth="3" />
-                                    <text x={n.x} y={n.y + 5} textAnchor="middle" fill="white" fontSize="14" fontWeight="bold">{n.id}</text>
-                                    <text x={n.x} y={n.y + 42} textAnchor="middle" fill="#94a3b8" fontSize="10" fontFamily="JetBrains Mono">
+                                    <circle cx={n.x} cy={n.y} r="24" fill={fill} stroke={stroke} strokeWidth="3" />
+                                    <text x={n.x} y={n.y + 5} textAnchor="middle" fill={pal.onNodeText} fontSize="14" fontWeight="bold">{n.id}</text>
+                                    <text x={n.x} y={n.y + 42} textAnchor="middle" fill={pal.label} fontSize="10" fontFamily="JetBrains Mono">
                                         {d === Infinity ? '∞' : d}
                                     </text>
                                 </g>
