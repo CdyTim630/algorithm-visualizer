@@ -10,65 +10,66 @@ interface AlgorithmInfoCardProps {
     classroomQuestion: string;
 }
 
+interface SectionProps {
+    label: string;
+    accent?: string;
+    children: React.ReactNode;
+}
+
+const Section: React.FC<SectionProps> = ({ label, accent = 'text-algo-gold', children }) => (
+    <div className="rounded-lg p-4 bg-algo-surface/50 border border-algo-border/30 hover:border-algo-border/60 transition-colors">
+        <h4 className={`text-xs font-semibold uppercase tracking-wider mb-2 ${accent}`}>
+            {label}
+        </h4>
+        <div className="text-sm text-algo-text leading-relaxed">{children}</div>
+    </div>
+);
+
 const AlgorithmInfoCard: React.FC<AlgorithmInfoCardProps> = ({
     coreIdea, steps, timeComplexity, spaceComplexity, useCases, commonMistakes, classroomQuestion
 }) => {
     return (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-6">
-            <div className="glass-card rounded-xl p-5 glow-hover transition-all">
-                <h4 className="text-algo-gold font-semibold mb-2 flex items-center gap-2">
-                    <span className="w-7 h-7 rounded-lg bg-algo-gold/10 flex items-center justify-center text-sm">💡</span>
-                    核心想法
-                </h4>
-                <p className="text-algo-text text-sm leading-relaxed">{coreIdea}</p>
-            </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mt-6">
+            <Section label="核心想法">
+                <p>{coreIdea}</p>
+            </Section>
 
-            <div className="glass-card rounded-xl p-5 glow-hover transition-all">
-                <h4 className="text-algo-gold font-semibold mb-2 flex items-center gap-2">
-                    <span className="w-7 h-7 rounded-lg bg-algo-gold/10 flex items-center justify-center text-sm">📋</span>
-                    步驟摘要
-                </h4>
-                <ol className="text-sm text-algo-text space-y-1 list-decimal list-inside">
+            <Section label="步驟摘要">
+                <ol className="space-y-1 list-decimal list-inside marker:text-algo-muted">
                     {steps.map((s, i) => <li key={i}>{s}</li>)}
                 </ol>
-            </div>
+            </Section>
 
-            <div className="glass-card rounded-xl p-5 glow-hover transition-all">
-                <h4 className="text-algo-gold font-semibold mb-2 flex items-center gap-2">
-                    <span className="w-7 h-7 rounded-lg bg-algo-gold/10 flex items-center justify-center text-sm">⏱️</span>
-                    複雜度
-                </h4>
-                <p className="text-sm text-algo-text">時間：<span className="font-mono text-algo-comparing">{timeComplexity}</span></p>
-                <p className="text-sm text-algo-text mt-1">空間：<span className="font-mono text-algo-comparing">{spaceComplexity}</span></p>
-            </div>
+            <Section label="複雜度">
+                <div className="space-y-1">
+                    <p className="flex justify-between"><span className="text-algo-muted">時間</span><span className="font-mono text-algo-comparing">{timeComplexity}</span></p>
+                    <p className="flex justify-between"><span className="text-algo-muted">空間</span><span className="font-mono text-algo-comparing">{spaceComplexity}</span></p>
+                </div>
+            </Section>
 
-            <div className="glass-card rounded-xl p-5 glow-hover transition-all">
-                <h4 className="text-algo-gold font-semibold mb-2 flex items-center gap-2">
-                    <span className="w-7 h-7 rounded-lg bg-algo-gold/10 flex items-center justify-center text-sm">🎯</span>
-                    適用情境
-                </h4>
-                <ul className="text-sm text-algo-text space-y-1">
-                    {useCases.map((u, i) => <li key={i} className="flex items-start gap-1"><span className="text-algo-done">✓</span> {u}</li>)}
+            <Section label="適用情境" accent="text-algo-done">
+                <ul className="space-y-1">
+                    {useCases.map((u, i) => (
+                        <li key={i} className="flex items-start gap-2">
+                            <span className="text-algo-done mt-0.5">✓</span><span>{u}</span>
+                        </li>
+                    ))}
                 </ul>
-            </div>
+            </Section>
 
-            <div className="glass-card rounded-xl p-5 glow-hover transition-all">
-                <h4 className="text-algo-gold font-semibold mb-2 flex items-center gap-2">
-                    <span className="w-7 h-7 rounded-lg bg-algo-gold/10 flex items-center justify-center text-sm">⚠️</span>
-                    常見錯誤
-                </h4>
-                <ul className="text-sm text-algo-text space-y-1">
-                    {commonMistakes.map((m, i) => <li key={i} className="flex items-start gap-1"><span className="text-algo-error">✗</span> {m}</li>)}
+            <Section label="常見錯誤" accent="text-algo-error">
+                <ul className="space-y-1">
+                    {commonMistakes.map((m, i) => (
+                        <li key={i} className="flex items-start gap-2">
+                            <span className="text-algo-error mt-0.5">✗</span><span>{m}</span>
+                        </li>
+                    ))}
                 </ul>
-            </div>
+            </Section>
 
-            <div className="rounded-xl p-5 glow-hover transition-all border border-algo-pivot/30 bg-gradient-to-br from-algo-pivot/10 to-algo-accent/5">
-                <h4 className="text-algo-pivot font-semibold mb-2 flex items-center gap-2">
-                    <span className="w-7 h-7 rounded-lg bg-algo-pivot/15 flex items-center justify-center text-sm">🔮</span>
-                    課堂提問
-                </h4>
-                <p className="text-sm text-algo-text italic leading-relaxed">{classroomQuestion}</p>
-            </div>
+            <Section label="課堂提問" accent="text-algo-pivot">
+                <p className="italic">{classroomQuestion}</p>
+            </Section>
         </div>
     );
 };

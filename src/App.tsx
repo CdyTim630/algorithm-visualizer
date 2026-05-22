@@ -40,26 +40,21 @@ const AppContent: React.FC = () => {
             />
 
             <main className="flex-1 flex flex-col min-h-screen">
-                {/* Top bar - IlluMinate themed */}
+                {/* Top bar */}
                 {currentSection !== 'hero' && (
-                    <div className="sticky top-0 z-30 bg-algo-bg/80 backdrop-blur-xl border-b border-algo-border/40 px-6 py-3 flex items-center justify-between">
-                        <button onClick={() => setCurrentSection('hero')} className="text-algo-muted hover:text-algo-gold text-sm flex items-center gap-1.5 transition-colors group">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="group-hover:-translate-x-0.5 transition-transform"><polyline points="15 18 9 12 15 6" /></svg>
-                            <span className="font-cinzel text-xs tracking-wider">IlluMinate</span>
-                            <span className="text-algo-muted/40 mx-1">·</span>
+                    <div className="sticky top-0 z-30 bg-algo-bg/85 backdrop-blur-md border-b border-algo-border/30 px-6 py-3 flex items-center justify-between">
+                        <button onClick={() => setCurrentSection('hero')} className="text-algo-muted hover:text-algo-text text-sm flex items-center gap-2 transition-colors group">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="group-hover:-translate-x-0.5 transition-transform"><polyline points="15 18 9 12 15 6" /></svg>
                             <span>返回首頁</span>
                         </button>
 
-                        <div className="flex items-center gap-4">
-                            <span className="hidden md:inline text-[10px] text-algo-gold/40 tracking-widest font-cinzel">2026 臺大資管營</span>
-                            <button onClick={toggleTeachingMode}
-                                className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-all border ${isTeachingMode
-                                        ? 'bg-algo-gold/15 text-algo-gold border-algo-gold/40 shadow-[0_0_12px_rgba(212,168,83,0.15)]'
-                                        : 'bg-algo-card text-algo-muted border-algo-border hover:text-algo-text hover:border-algo-pivot/30'
-                                    }`}>
-                                {isTeachingMode ? '🔮 教學模式 ON' : '📖 一般模式'}
-                            </button>
-                        </div>
+                        <button onClick={toggleTeachingMode}
+                            className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors border ${isTeachingMode
+                                    ? 'bg-algo-gold/10 text-algo-gold border-algo-gold/30'
+                                    : 'bg-transparent text-algo-muted border-algo-border/40 hover:text-algo-text hover:border-algo-border'
+                                }`}>
+                            {isTeachingMode ? '教學模式 ON' : '教學模式 OFF'}
+                        </button>
                     </div>
                 )}
 
