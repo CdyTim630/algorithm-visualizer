@@ -1,4 +1,4 @@
-import{r as s,j as n,m as Y}from"./index-BCfXqO4T.js";const R=[{id:"A",title:"PDAO Game",pdfHref:"appendix/a-pdao-game.pdf",cases:[{id:"A-1",label:"Sample sample1",input:`5 2 2
+import{r as s,j as n,m as Y}from"./index-B11Gw6is.js";const R=[{id:"A",title:"PDAO Game",pdfHref:"appendix/a-pdao-game.pdf",cases:[{id:"A-1",label:"Sample sample1",input:`5 2 2
 -w-w-
 -w-w-
 ww0-w
